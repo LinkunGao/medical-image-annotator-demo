@@ -74,8 +74,8 @@ import Upload from "@/components/common/Upload.vue";
 
 import { GUI } from "dat.gui";
 import "copper3d/dist/css/style.css";
-import * as Copper from "copper3d";
-// import * as Copper from "@/ts/index";
+// import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 
 import { onBeforeMount, onMounted, ref, onUnmounted } from "vue";
 import {
@@ -86,6 +86,8 @@ import {
 } from "@/models";
 import emitter from "@/plugins/custom-emitter";
 import { switchAnimationStatus } from "@/components/viewer/utils";
+
+console.log(Copper.REVISION);
 
 // Import composables
 import {

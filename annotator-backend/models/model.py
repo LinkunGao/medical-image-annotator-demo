@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Union
+from typing import Union, List, Optional
 from .api_models import UserAuth
 
 
@@ -13,6 +13,31 @@ class Mask(BaseModel):
     sliceId: int
     label: str
     mask: list
+
+
+# Phase 0 - Data Persistence Strategy: New models for layer-based mask operations
+
+class MaskDeltaChange(BaseModel):
+    """Single voxel change in a mask layer"""
+    x: int  # voxel X coordinate
+    y: int  # voxel Y coordinate
+    z: int  # voxel Z coordinate (slice index)
+    value: int  # channel value (0-8, where 0 = transparent)
+
+
+class MaskDeltaRequest(BaseModel):
+    """Request model for incremental mask updates"""
+    caseId: Union[int, str]
+    layer: str  # 'layer1', 'layer2', or 'layer3'
+    changes: List[MaskDeltaChange]
+
+
+class MaskInitRequest(BaseModel):
+    """Request model for initializing empty masks for a new case"""
+    caseId: Union[int, str]
+    dimensions: List[int]  # [width, height, depth]
+    voxelSpacing: Optional[List[float]] = None
+    spaceOrigin: Optional[List[float]] = None
 
 
 class Sphere(BaseModel):

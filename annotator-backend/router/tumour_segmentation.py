@@ -3,7 +3,7 @@ import json
 import time
 from fastapi import Query, BackgroundTasks, WebSocket, HTTPException, Depends
 from fastapi.responses import FileResponse, StreamingResponse
-from utils import tools, TumourData
+from utils import tools
 from utils.ws_manager import manager
 from models import model
 from task import task_oi
@@ -64,8 +64,17 @@ async def get_cases_infos(auth: UserAuth, db: Session = Depends(get_db)):
                 "registration_4": case.input.registration_4_path if case.input else None,
             },
             "output": {
-                "mask_json_path": case.output.mask_json_path if case.output else None,
-                "mask_json_size": case.output.mask_json_size if case.output else None,
+                # Config.OUTPUTS[0]: mask-meta-json
+                "mask_meta_json_path": case.output.mask_meta_json_path if case.output else None,
+                "mask_meta_json_size": case.output.mask_meta_json_size if case.output else None,
+                # Config.OUTPUTS[1-3]: mask-layer*-nii
+                "mask_layer1_nii_path": case.output.mask_layer1_nii_path if case.output else None,
+                "mask_layer1_nii_size": case.output.mask_layer1_nii_size if case.output else None,
+                "mask_layer2_nii_path": case.output.mask_layer2_nii_path if case.output else None,
+                "mask_layer2_nii_size": case.output.mask_layer2_nii_size if case.output else None,
+                "mask_layer3_nii_path": case.output.mask_layer3_nii_path if case.output else None,
+                "mask_layer3_nii_size": case.output.mask_layer3_nii_size if case.output else None,
+                # Config.OUTPUTS[4]: mask-obj
                 "mask_obj_path": case.output.mask_obj_path if case.output else None,
                 "mask_obj_size": case.output.mask_obj_size if case.output else None,
             }
@@ -178,17 +187,232 @@ async def get_display_breast_model(name: str = Query(None)):
         return False
 
 
-@router.post("/api/save_tumour_position")
-async def save_tumour_position(save_position: model.TumourPosition):
-    tumour_position_path = tools.get_file_path(save_position.case_name, "json", "tumour_window.json")
-    position_json = {}
-    if tumour_position_path.exists():
-        with open(tumour_position_path, "r") as tumour_position_file:
-            data = tumour_position_file.read()
-            position_json = json.loads(data)
-    position_json["center"] = save_position.model_dump().get("position")
-    position_json["validate"] = save_position.model_dump().get("validate", False)
-    with open(tumour_position_path, "w") as tumour_position_file:
-        json.dump(position_json, tumour_position_file, indent=4)
+# =============================================================================
+# Phase 0 - Data Persistence Strategy: New Mask APIs
+# =============================================================================
 
-    return True
+@router.get("/api/mask/all/{case_id}")
+async def get_all_masks(case_id: int, db: Session = Depends(get_db)):
+    """
+    Load all 3 mask layers for a case in a single request.
+    Returns msgpack-encoded binary data for efficient transfer.
+    
+    Frontend usage: 
+        const data = msgpack.decode(new Uint8Array(await response.arrayBuffer()))
+        if (data.layer1) segmentationManager.setLayerData('layer1', new Uint8Array(data.layer1))
+    """
+    import msgpack
+    from fastapi.responses import Response
+    
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == case_id).first()  # type: ignore
+    if not case_output:
+        raise HTTPException(status_code=404, detail="CaseOutput not found")
+    
+    masks = {
+        "shape": None,  # Will be populated from NIfTI header if data exists
+    }
+    
+    # Load each layer's NIfTI file if it exists and has data
+    for layer_idx in range(1, 4):
+        layer_path_attr = f"mask_layer{layer_idx}_nii_path"
+        layer_size_attr = f"mask_layer{layer_idx}_nii_size"
+        
+        layer_path = getattr(case_output, layer_path_attr)
+        layer_size = getattr(case_output, layer_size_attr)
+        
+        if layer_path and layer_size and layer_size > 0:
+            file_path = Path(layer_path)
+            if file_path.exists() and file_path.stat().st_size > 0:
+                # Read the raw bytes of the NIfTI file
+                with open(file_path, "rb") as f:
+                    masks[f"layer{layer_idx}"] = f.read()
+            else:
+                masks[f"layer{layer_idx}"] = None
+        else:
+            masks[f"layer{layer_idx}"] = None
+    
+    return Response(content=msgpack.packb(masks), media_type="application/msgpack")
+
+
+@router.get("/api/mask/raw/{case_id}/{layer_id}")
+async def get_mask_raw(case_id: int, layer_id: str, db: Session = Depends(get_db)):
+    """
+    Get raw Uint8Array data for a specific layer.
+    Returns application/octet-stream with X-Mask-Shape header.
+    
+    Useful for AI model inference results that skip NIfTI encoding.
+    """
+    from fastapi.responses import Response
+    
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == case_id).first()  # type: ignore
+    if not case_output:
+        raise HTTPException(status_code=404, detail="CaseOutput not found")
+    
+    # Validate layer_id
+    if layer_id not in ["layer1", "layer2", "layer3"]:
+        raise HTTPException(status_code=400, detail="Invalid layer_id. Must be layer1, layer2, or layer3")
+    
+    layer_path = getattr(case_output, f"mask_{layer_id}_nii_path")
+    layer_size = getattr(case_output, f"mask_{layer_id}_nii_size")
+    
+    if not layer_path or not layer_size or layer_size == 0:
+        raise HTTPException(status_code=404, detail=f"Layer {layer_id} has no data")
+    
+    file_path = Path(layer_path)
+    if not file_path.exists() or file_path.stat().st_size == 0:
+        raise HTTPException(status_code=404, detail=f"Layer {layer_id} file not found or empty")
+    
+    # Read the NIfTI file and extract raw data
+    # For now, return the raw file bytes - frontend will parse NIfTI
+    with open(file_path, "rb") as f:
+        raw_data = f.read()
+    
+    return Response(
+        content=raw_data,
+        media_type="application/octet-stream",
+        headers={"X-Layer-Id": layer_id}
+    )
+
+
+@router.post("/api/mask/delta")
+async def apply_mask_delta(delta: model.MaskDeltaRequest, db: Session = Depends(get_db)):
+    """
+    Apply incremental delta updates to a specific layer.
+    Only modifies changed voxels instead of replacing entire slices.
+    
+    This is much more efficient than the legacy /api/mask/replace endpoint
+    which requires sending entire slice data.
+    """
+    import nibabel as nib
+    import numpy as np
+    
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == delta.caseId).first()  # type: ignore
+    if not case_output:
+        raise HTTPException(status_code=404, detail="CaseOutput not found")
+    
+    # Validate layer
+    if delta.layer not in ["layer1", "layer2", "layer3"]:
+        raise HTTPException(status_code=400, detail="Invalid layer. Must be layer1, layer2, or layer3")
+    
+    layer_path = getattr(case_output, f"mask_{delta.layer}_nii_path")
+    if not layer_path:
+        raise HTTPException(status_code=404, detail=f"Layer {delta.layer} path not configured")
+    
+    file_path = Path(layer_path)
+    
+    try:
+        # Load existing NIfTI or create new if empty
+        if file_path.exists() and file_path.stat().st_size > 0:
+            img = nib.load(str(file_path))
+            data = img.get_fdata().astype(np.uint8)
+            affine = img.affine
+        else:
+            # Cannot apply delta to non-existent data
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Layer {delta.layer} has no initialized data. Use /api/mask/init first."
+            )
+        
+        # Apply delta changes
+        for change in delta.changes:
+            if 0 <= change.x < data.shape[0] and \
+               0 <= change.y < data.shape[1] and \
+               0 <= change.z < data.shape[2]:
+                data[change.x, change.y, change.z] = change.value
+        
+        # Save updated NIfTI
+        new_img = nib.Nifti1Image(data, affine)
+        nib.save(new_img, str(file_path))
+        
+        # Update size in database
+        setattr(case_output, f"mask_{delta.layer}_nii_size", file_path.stat().st_size)
+        db.commit()
+        db.refresh(case_output)
+        
+        return {"success": True, "changesApplied": len(delta.changes)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to apply delta: {str(e)}")
+
+
+@router.post("/api/mask/init-layers")
+async def init_mask_layers(request: model.MaskInitRequest, db: Session = Depends(get_db)):
+    """
+    Initialize empty NIfTI mask files for a new case.
+    Called when all layer sizes are 0 (new case).
+    
+    Creates 3 empty Uint8Array volumes with the specified dimensions.
+    """
+    import nibabel as nib
+    import numpy as np
+    
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == request.caseId).first()  # type: ignore
+    if not case_output:
+        raise HTTPException(status_code=404, detail="CaseOutput not found")
+    
+    if len(request.dimensions) != 3:
+        raise HTTPException(status_code=400, detail="Dimensions must be [width, height, depth]")
+    
+    width, height, depth = request.dimensions
+    
+    # Create affine matrix from spacing and origin
+    if request.voxelSpacing and len(request.voxelSpacing) >= 3:
+        spacing = request.voxelSpacing[:3]
+    else:
+        spacing = [1.0, 1.0, 1.0]  # Default 1mm spacing
+    
+    if request.spaceOrigin and len(request.spaceOrigin) >= 3:
+        origin = request.spaceOrigin[:3]
+    else:
+        origin = [0.0, 0.0, 0.0]
+    
+    affine = np.diag([spacing[0], spacing[1], spacing[2], 1.0])
+    affine[:3, 3] = origin
+    
+    # Create empty volume
+    empty_data = np.zeros((width, height, depth), dtype=np.uint8)
+    
+    # Initialize each layer
+    for layer_idx in range(1, 4):
+        layer_path = getattr(case_output, f"mask_layer{layer_idx}_nii_path")
+        if layer_path:
+            file_path = Path(layer_path)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Create NIfTI image
+            img = nib.Nifti1Image(empty_data.copy(), affine)
+            nib.save(img, str(file_path))
+            
+            # Update size in database
+            setattr(case_output, f"mask_layer{layer_idx}_nii_size", file_path.stat().st_size)
+    
+    db.commit()
+    db.refresh(case_output)
+    
+    return {
+        "success": True,
+        "dimensions": request.dimensions,
+        "layers_initialized": ["layer1", "layer2", "layer3"]
+    }
+
+
+@router.websocket("/ws/mask/{case_id}")
+async def websocket_mask(websocket: WebSocket, case_id: str):
+    """
+    WebSocket endpoint for real-time mask updates.
+    Used for AI inference results to push mask data to frontend.
+    
+    Frontend connects and receives binary Uint8Array data when AI generates new masks.
+    """
+    await manager.connect(f"mask_{case_id}", websocket)
+    try:
+        while True:
+            # Keep connection alive, can receive commands from frontend
+            data = await websocket.receive_text()
+            # Handle any frontend commands here if needed
+            if data == "ping":
+                await websocket.send_text("pong")
+    except Exception as e:
+        print(f"Mask WebSocket closed for case {case_id}: {e}")
+    finally:
+        manager.disconnect(f"mask_{case_id}")

@@ -73,16 +73,27 @@ class CaseOutput(Base):
     id = Column(Integer, primary_key=True, index=True)
     case_id = Column(Integer, ForeignKey('cases.id'), unique=True, nullable=False)
     
-    mask_json_path = Column(String, nullable=True)
-    mask_json_size = Column(Integer, nullable=True)
-    mask_nii_path = Column(String, nullable=True)
-    mask_nii_size = Column(Integer, nullable=True)
+    # Legacy JSON mask storage (kept for backward compatibility)
+    # Config.OUTPUTS[0]: "mask-meta-json"
+    mask_meta_json_path = Column(String, nullable=True)
+    mask_meta_json_size = Column(Integer, nullable=True)
+    
+    # Layer-specific NIfTI mask storage (Phase 0 - Data Persistence Strategy)
+    # Config.OUTPUTS[1-3]: "mask-layer1-nii", "mask-layer2-nii", "mask-layer3-nii"
+    mask_layer1_nii_path = Column(String, nullable=True)
+    mask_layer1_nii_size = Column(Integer, nullable=True)
+    mask_layer2_nii_path = Column(String, nullable=True)
+    mask_layer2_nii_size = Column(Integer, nullable=True)
+    mask_layer3_nii_path = Column(String, nullable=True)
+    mask_layer3_nii_size = Column(Integer, nullable=True)
+    
+    # 3D mesh output
+    # Config.OUTPUTS[4]: "mask-obj"
     mask_obj_path = Column(String, nullable=True)
     mask_obj_size = Column(Integer, nullable=True)
-    tumour_center_position_json_path = Column(String, nullable=True)
-    tumour_center_position_json_size = Column(Integer, nullable=True)
     
     temp_dataset_name = Column(String, nullable=True)
     sparc_sds_dataset_name = Column(String, nullable=True)
 
     case = relationship("Case", back_populates="output")
+

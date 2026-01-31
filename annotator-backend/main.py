@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from pathlib import Path
 import io
 import os
-from router import tumour_position, tumour_segmentation
+from router import tumour_segmentation
 from dotenv import load_dotenv
 from typing import List
 from sqlalchemy.orm import Session
@@ -32,7 +32,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Medical Image Annotator", verison="1.0.0", lifespan=lifespan)
-app.include_router(tumour_position.router)
 app.include_router(tumour_segmentation.router)
 
 expose_headers = ["x-volume", "x-file-name", "Content-Disposition"]
@@ -172,19 +171,14 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                     "outputs") / request.user_info.uuid / request.assay_info.uuid / "medical-image-annotator-outputs"
                 output_dir.mkdir(parents=True, exist_ok=True)
 
-                # Definition of output mapping basic logic
-                # Config.OUTPUTS = ["contrast-1-mask-json", "contrast-1-mask-nii", "contrast-1-mask-obj", "tumour-center-position-json"]
-                # We need to map these to DB columns
+                # Create case-specific folder
+                case_folder = output_dir / cohort
+                case_folder.mkdir(parents=True, exist_ok=True)
 
                 file_info = {}
 
                 for idx, output_type in enumerate(Config.OUTPUTS):
-                    # Construct generic filename. Can use the output_type as filename or append extension.
-                    # Config output strings look like "contrast-1-mask-json", usually implying extension.
-                    # Let's assume filename = output_type (or with specific extension logic if needed).
-                    # For safety, let's append implicit extensions if missing or just use the type as name.
-                    # User request: "create all empty outputs files"
-
+                    # Create legacy JSON mask file for backward compatibility
                     filename = output_type
                     if "json" in output_type and not filename.endswith(".json"):
                         filename += ".json"
@@ -194,7 +188,7 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                         filename += ".obj"
 
                     sam_folder = output_dir / cohort / f"sam-{idx + 1}"
-                    sam_folder.mkdir(parents=True, exist_ok=True)
+                    sam_folder.mkdir(exist_ok=True, parents=True)
                     file_path = sam_folder / filename
 
                     # Create empty file
@@ -209,25 +203,28 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                         "size": file_size
                     }
 
-                # Update case_output
+                # Update case_output with fields matching Config.OUTPUTS
                 case_output = CaseOutput(
                     case_id=case.id,
-                    mask_json_path=file_info.get("mask-json", {}).get("path"),
-                    mask_json_size=file_info.get("mask-json", {}).get("size"),
-
-                    mask_nii_path=file_info.get("mask-nii", {}).get("path"),
-                    mask_nii_size=file_info.get("mask-nii", {}).get("size"),
-
+                    # Config.OUTPUTS[0]: mask-meta-json
+                    mask_meta_json_path=file_info.get("mask-meta-json", {}).get("path"),
+                    mask_meta_json_size=file_info.get("mask-meta-json", {}).get("size"),
+                    # Config.OUTPUTS[1-3]: mask-layer1-nii, mask-layer2-nii, mask-layer3-nii
+                    mask_layer1_nii_path=file_info.get("mask-layer1-nii", {}).get("path"),
+                    mask_layer1_nii_size=file_info.get("mask-layer1-nii", {}).get("size"),
+                    mask_layer2_nii_path=file_info.get("mask-layer2-nii", {}).get("path"),
+                    mask_layer2_nii_size=file_info.get("mask-layer2-nii", {}).get("size"),
+                    mask_layer3_nii_path=file_info.get("mask-layer3-nii", {}).get("path"),
+                    mask_layer3_nii_size=file_info.get("mask-layer3-nii", {}).get("size"),
+                    # Config.OUTPUTS[4]: mask-obj
                     mask_obj_path=file_info.get("mask-obj", {}).get("path"),
                     mask_obj_size=file_info.get("mask-obj", {}).get("size"),
-
-                    tumour_center_position_json_path=file_info.get("tumour-center-position-json", {}).get("path"),
-                    tumour_center_position_json_size=file_info.get("tumour-center-position-json", {}).get("size"),
 
                     temp_dataset_name="medical-image-annotator-outputs",
                 )
 
                 db.add(case_output)
+
 
         db.commit()
         return {"status": "success", "assay_id": assay.id}
