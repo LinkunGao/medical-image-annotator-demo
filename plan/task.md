@@ -54,36 +54,36 @@
 ## Phase 2: Core Data Layer
 
 ### 2.1 Types & Constants
-- [ ] `core/types.ts` - 定义 ExportMaskData, Delta, CHANNEL_COLORS
+- [x] `core/types.ts` - 定义 ExportMaskData, Delta, CHANNEL_COLORS
 
 ### 2.2 MaskLayer
-- [ ] `core/MaskLayer.ts` - 单图层 Uint8Array 存储
-- [ ] 实现 `applyBrush()` - 画笔操作
-- [ ] 实现 `fillPolygon()` - Pencil 多边形填充 ⭐
-- [ ] 实现 `erase()` - 橡皮擦
-- [ ] 实现 `exportSlice()` / `importSlice()` - 数据导入导出
+- [x] `core/MaskLayer.ts` - 单图层 Uint8Array 存储
+- [x] 实现 `applyBrush()` - 画笔操作
+- [x] 实现 `fillPolygon()` - Pencil 多边形填充 ⭐
+- [x] 实现 `erase()` - 橡皮擦
+- [x] 实现 `exportSlice()` / `importSlice()` - 数据导入导出
 
 ### 2.3 LayerManager
-- [ ] `core/LayerManager.ts` - 3 图层管理
-- [ ] 实现 `getActiveLayer()` / `setActiveLayer()`
-- [ ] 实现 `lockLayer()` / `unlockLayer()`
+- [x] `core/LayerManager.ts` - 3 图层管理
+- [x] 实现 `getActiveLayer()` / `setActiveLayer()`
+- [x] 实现 `lockLayer()` / `unlockLayer()`
 
 ### 2.4 VisibilityManager
-- [ ] `core/VisibilityManager.ts` - 通道显示/隐藏
-- [ ] 实现 `setLayerVisible()` / `setChannelVisible()`
-- [ ] 实现 `getVisibleLayers()` / `getVisibleChannels()`
+- [x] `core/VisibilityManager.ts` - 通道显示/隐藏
+- [x] 实现 `setLayerVisible()` / `setChannelVisible()`
+- [x] 实现 `getVisibleLayers()` / `getVisibleChannels()`
 
 ### 2.5 UndoManager
-- [ ] `core/UndoManager.ts` - 每 layer 独立 undo/redo 栈
-- [ ] 实现 `push(deltas)` / `undo()` / `redo()`
-- [ ] 实现 `setActiveLayer()` 切换当前操作栈
+- [x] `core/UndoManager.ts` - 每 layer 独立 undo/redo 栈
+- [x] 实现 `push(deltas)` / `undo()` / `redo()`
+- [x] 实现 `setActiveLayer()` 切换当前操作栈
 
 ### 2.6 KeyboardManager
-- [ ] `core/KeyboardManager.ts` - 可自定义快捷键
-- [ ] 实现 `registerAction()` / `onKeyDown()` / `onKeyUp()`
-- [ ] 支持 Crosshair/Contrast 可禁用配置
+- [x] `core/KeyboardManager.ts` - 可自定义快捷键
+- [x] 实现 `register()` / `onAction()` / key event handlers
+- [x] 支持 Crosshair/Contrast 可禁用配置
 
-- [ ] **🧪 User Testing: 创建 MaskLayer 并验证 Uint8Array 读写**
+- [x] **🧪 User Testing: 创建 MaskLayer 并验证 Uint8Array 读写** ✅
 
 ---
 
