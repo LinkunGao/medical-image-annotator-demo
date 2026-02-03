@@ -876,29 +876,193 @@ onPointerDown(e: PointerEvent) {
 
 ---
 
-## Phase 3: Tool Abstraction
+## Phase 3: Tool Abstraction ✅
 
-### [NEW] [tools/BaseTool.ts](file:///c:/Users/lgao142/Desktop/clinial%20dashboard%20plugin%20work%202025/medical-image-annotator/annotator-frontend/src/ts/Utils/segmentation/tools/BaseTool.ts)
+> [!NOTE]
+> Phase 3 已完成。67 个单元测试全部通过。
+
+### [NEW] `tools/BaseTool.ts` - ToolContext 接口 + 抽象基类
 
 ```typescript
 export interface ToolContext {
   layerManager: LayerManager
   undoManager: UndoManager
+  visibilityManager: VisibilityManager
+  keyboardManager: KeyboardManager
   currentChannel: number
   currentSlice: number
   currentAxis: 'x' | 'y' | 'z'
   brushSize: number
-  sizeFactor: number  // 当前缩放比例
-  globalAlpha: number // 全局透明度 (只读)
+  sizeFactor: number
+  globalAlpha: number
+  drawingCtx: CanvasRenderingContext2D | null
+  drawingCanvas: HTMLCanvasElement | null
+  requestRender: () => void
+}
+
+export type ToolName = 'pencil' | 'brush' | 'eraser' | 'pan' | 'zoom' | 'contrast' | 'sphere'
+
+export abstract class BaseTool {
+  abstract readonly name: ToolName
+  // 坐标转换 (screen ↔ original)
+  screenToOriginal(screenX, screenY): { x, y }
+  originalToScreen(origX, origY): { x, y }
+  screenBrushToOriginal(screenSize): number
+  // 生命周期
+  activate(): void
+  deactivate(): void
+  // 事件
+  abstract onPointerDown(e: PointerEvent): Delta[]
+  abstract onPointerMove(e: PointerEvent): Delta[]
+  abstract onPointerUp(e: PointerEvent): Delta[]
+  onWheel(e: WheelEvent): void
 }
 ```
 
-### [NEW] [tools/BrushTool.ts](file:///c:/Users/lgao142/Desktop/clinial%20dashboard%20plugin%20work%202025/medical-image-annotator/annotator-frontend/src/ts/Utils/segmentation/tools/BrushTool.ts)
-### [NEW] [tools/EraserTool.ts](file:///c:/Users/lgao142/Desktop/clinial%20dashboard%20plugin%20work%202025/medical-image-annotator/annotator-frontend/src/ts/Utils/segmentation/tools/EraserTool.ts)
+### [NEW] `tools/PencilTool.ts` - 多边形自动填充 ⭐
+
+| 事件 | 行为 |
+|------|------|
+| `onPointerDown` | 开始记录轮廓点 |
+| `onPointerMove` | 添加点，在 drawingCanvas 上画红色轮廓预览 |
+| `onPointerUp` | 闭合多边形，调用 `MaskLayer.fillPolygon()` 填充，推送 UndoManager |
+
+### [NEW] `tools/BrushTool.ts` - 连续圆形笔刷
+
+| 事件 | 行为 |
+|------|------|
+| `onPointerDown` | 开始绘画，在初始位置应用笔刷 |
+| `onPointerMove` | 连续应用笔刷 + 显示圆形光标预览 |
+| `onPointerUp` | 将所有笔触 delta 作为单次 undo 操作推送 |
+
+### [NEW] `tools/EraserTool.ts` - 橡皮擦
+
+| 事件 | 行为 |
+|------|------|
+| `onPointerDown` | 开始擦除 (channel=0) |
+| `onPointerMove` | 持续擦除 + 显示虚线圆形预览 |
+| `onPointerUp` | 将所有 delta 作为单次 undo 操作推送 |
+
+### [NEW] `tools/PanTool.ts` - 右键平移画布
+
+```typescript
+// Adapter 模式: 解耦 Canvas 定位
+interface PanAdapter {
+  getCanvasLeft(): number
+  getCanvasTop(): number
+  setCanvasPosition(left: number, top: number): void
+}
+```
+
+| 事件 | 行为 |
+|------|------|
+| `onPointerDown` | 记录初始鼠标 + Canvas 位置 |
+| `onPointerMove` | 按鼠标增量平移 Canvas |
+| `onPointerUp` | 停止平移 |
+
+### [NEW] `tools/ZoomTool.ts` - 滚轮缩放 / Slice 切换
+
+```typescript
+// Adapter 模式: 解耦缩放渲染
+interface ZoomAdapter {
+  getSizeFactor(): number
+  setSizeFactor(factor: number, mouseX: number, mouseY: number): void
+  getCurrentSlice(): number
+  setCurrentSlice(index: number): void
+  getMaxSlice(): number
+}
+```
+
+| 模式 | 行为 |
+|------|------|
+| `Scroll:Zoom` | 鼠标滚轮在光标位置缩放 (1x-8x) |
+| `Scroll:Slice` | 鼠标滚轮切换 slice |
+
+### [NEW] `tools/ContrastTool.ts` - Window Center/Width 调节
+
+```typescript
+// Adapter 模式: 解耦 NRRD 对比度渲染
+interface ContrastAdapter {
+  getWindowCenter(): number
+  getWindowWidth(): number
+  setWindowCenter(value: number): void
+  setWindowWidth(value: number): void
+  refreshDisplay(): void
+}
+```
+
+| 拖拽方向 | 调节 |
+|---------|------|
+| 水平 (X) | Window Center |
+| 垂直 (Y) | Window Width (≥1) |
+
+### [NEW] `tools/SphereTool.ts` - 3D 球体放置 ⭐
+
+```typescript
+// 4 种球体类型
+type SphereType = 'tumour' | 'skin' | 'nipple' | 'ribcage'
+
+// 跨轴坐标存储
+interface SphereOrigin {
+  x: [number, number, number]  // [mx, my, slice] on X axis
+  y: [number, number, number]
+  z: [number, number, number]
+}
+
+// 两种衰减模式
+type SphereDecayMode = 'linear' | 'spherical'
+
+// Adapter 模式: 解耦跨轴坐标转换
+interface SphereAdapter {
+  convertCursorPoint(from, to, mouseX, mouseY, sliceIndex): { x, y, sliceIndex } | null
+  getMaxSlice(axis): number
+  onSpherePlaced?(origin, radius): void
+  onCalculatorPositionsUpdated?(positions, currentAxis): void
+}
+```
+
+| 事件 | 行为 |
+|------|------|
+| `onPointerDown` | 记录球心 3D 坐标，显示预览圆 |
+| `onWheel` (按住时) | 调节半径 [1, 50]，重绘预览 |
+| `onPointerUp` | 3D 球体写入多 slice，存储位置，通知回调 |
+
+### [NEW] `tools/index.ts` - 统一导出
+
+### Phase 3 文件清单
+
+| 文件 | 行数 | 说明 |
+|------|------|------|
+| `tools/BaseTool.ts` | 174 | ToolContext + 抽象基类 |
+| `tools/PencilTool.ts` | 128 | 多边形自动填充 |
+| `tools/BrushTool.ts` | 140 | 连续圆形笔刷 |
+| `tools/EraserTool.ts` | 133 | 橡皮擦 (channel 0) |
+| `tools/PanTool.ts` | 118 | 右键平移 + PanAdapter |
+| `tools/ZoomTool.ts` | 109 | 滚轮缩放/Slice + ZoomAdapter |
+| `tools/ContrastTool.ts` | 129 | 对比度调节 + ContrastAdapter |
+| `tools/SphereTool.ts` | 340 | 3D 球体 + SphereAdapter |
+| `tools/index.ts` | 29 | 统一导出 |
+| `__tests__/tools.test.ts` | 580 | 67 个单元测试 |
+
+### Adapter 模式架构
+
+```
+Project Layer (Vue/Canvas)          npm Package (tools/)
+┌─────────────────────┐           ┌─────────────────────┐
+│ Canvas positioning  │◄──────────│ PanAdapter           │
+│ Zoom rendering      │◄──────────│ ZoomAdapter          │
+│ NRRD contrast       │◄──────────│ ContrastAdapter      │
+│ Axis conversion     │◄──────────│ SphereAdapter        │
+└─────────────────────┘           └─────────────────────┘
+     Provides implementation          Defines interface
+```
 
 ---
 
-## Phase 4: Rendering Pipeline
+## Phase 4: Rendering Pipeline ✅
+
+> [!NOTE]
+> Phase 4 已完成。45 个单元测试全部通过。
 
 ### [NEW] [rendering/MaskRenderer.ts](file:///c:/Users/lgao142/Desktop/clinial%20dashboard%20plugin%20work%202025/medical-image-annotator/annotator-frontend/src/ts/Utils/segmentation/rendering/MaskRenderer.ts)
 
@@ -1077,22 +1241,37 @@ yarn add -D vitest @vitest/ui jsdom
 ```
 segmentation/
 ├── core/
-│   ├── types.ts              [NEW]
-│   ├── MaskLayer.ts          [NEW]
-│   ├── LayerManager.ts       [NEW]
-│   ├── VisibilityManager.ts  [NEW]
-│   ├── UndoManager.ts        [NEW]
-│   └── KeyboardManager.ts    [NEW]
+│   ├── types.ts              [NEW] ✅ Phase 2
+│   ├── MaskLayer.ts          [NEW] ✅ Phase 2
+│   ├── LayerManager.ts       [NEW] ✅ Phase 2
+│   ├── VisibilityManager.ts  [NEW] ✅ Phase 2
+│   ├── UndoManager.ts        [NEW] ✅ Phase 2
+│   ├── KeyboardManager.ts    [NEW] ✅ Phase 2
+│   ├── MaskLayerLoader.ts    [NEW] ✅ Phase 0
+│   ├── DebouncedAutoSave.ts  [NEW] ✅ Phase 0
+│   └── index.ts              [NEW] ✅ Phase 2 (updated Phase 3, Phase 4)
 ├── tools/
-│   ├── BaseTool.ts           [NEW]
-│   ├── BrushTool.ts          [NEW]
-│   ├── EraserTool.ts         [NEW]
-│   ├── CrosshairTool.ts      [NEW]
-│   └── SphereTool.ts         [NEW]
+│   ├── BaseTool.ts           [NEW] ✅ Phase 3
+│   ├── PencilTool.ts         [NEW] ✅ Phase 3
+│   ├── BrushTool.ts          [NEW] ✅ Phase 3
+│   ├── EraserTool.ts         [NEW] ✅ Phase 3
+│   ├── PanTool.ts            [NEW] ✅ Phase 3
+│   ├── ZoomTool.ts           [NEW] ✅ Phase 3
+│   ├── ContrastTool.ts       [NEW] ✅ Phase 3
+│   ├── SphereTool.ts         [NEW] ✅ Phase 3
+│   ├── CrosshairTool.ts      [NEW] Phase 5
+│   └── index.ts              [NEW] ✅ Phase 3
 ├── rendering/
-│   └── MaskRenderer.ts       [NEW]
-├── SegmentationManager.ts    [NEW]
-└── __tests__/                [NEW]
+│   └── MaskRenderer.ts       [NEW] ✅ Phase 4
+├── SegmentationManager.ts    [NEW] Phase 6
+├── __tests__/
+│   ├── core.test.ts          [NEW] ✅ Phase 2 (42 tests)
+│   ├── tools.test.ts         [NEW] ✅ Phase 3 (67 tests)
+│   └── rendering.test.ts     [NEW] ✅ Phase 4 (45 tests)
+└── shaders/                  [NEW] ✅ Phase 2
+    ├── mask2d.vert
+    ├── mask2d.frag
+    └── vignette.frag
 ```
 
 ---
@@ -1125,13 +1304,18 @@ segmentation/
 | **类型定义** | `coreTools/coreType.ts` | `core/types.ts` | 重构 |
 | **Mask 存储** | `protectedData.maskData.paintImagesLabel1/2/3` | `core/MaskLayer.ts` (Uint8Array) | 重构 |
 | **Undo 栈** | `DrawToolCore.undoArray` | `core/UndoManager.ts` (每 layer 独立) | 重构 |
-| **画笔/橡皮擦** | `DrawToolCore.paintOnCanvas()` | `tools/BrushTool.ts`, `EraserTool.ts` | 拆分 |
-| **Crosshair** | `DrawToolCore.enableCrosshair()`, `convertCursorPoint()` | `tools/CrosshairTool.ts` | 拆分 |
-| **Sphere** | `DrawToolCore.drawSphere()`, `drawCalSphereDown/Up()` | `tools/SphereTool.ts` | 拆分 |
-| **键盘管理** | `DrawToolCore.initDrawToolCore()` | `core/KeyboardManager.ts` | 重构 |
-| **Zoom/Slice滚轮** | `DrawToolCore.handleMouseZoomSliceWheel` | `tools/ZoomTool.ts` / `SegmentationManager` | 拆分 |
-| **PAN** | `DrawToolCore.handleOnPanMouseMove` | `tools/PanTool.ts` | 新建 |
-| **Contrast 调节** | `DrawToolCore.configContrastDragMode()` | `tools/ContrastTool.ts` | 新建 |
+| **Pencil (多边形填充)** | `DrawToolCore` pencil logic (lines + fill) | `tools/PencilTool.ts` | ✅ 已迁移 |
+| **画笔** | `DrawToolCore` brush/start function | `tools/BrushTool.ts` | ✅ 已迁移 |
+| **橡皮擦** | `DrawToolCore.useEraser()` | `tools/EraserTool.ts` | ✅ 已迁移 (改进) |
+| **Crosshair** | `DrawToolCore.enableCrosshair()`, `convertCursorPoint()` | `tools/CrosshairTool.ts` | Phase 5 待做 |
+| **Sphere** | `DrawToolCore.drawSphere/drawCalSphereDown/Up` | `tools/SphereTool.ts` | ✅ 已迁移 |
+| **Sphere 滚轮** | `DrawToolCore.configMouseSphereWheel` | `SphereTool.onWheel` | ✅ 已迁移 |
+| **Sphere 跨轴** | `DrawToolCore.setUpSphereOrigins` | `SphereTool.buildSphereOrigin` | ✅ 已迁移 (via adapter) |
+| **Sphere 3D 应用** | `DrawToolCore.drawSphereOnEachViews` | `SphereTool.applySphere3D` | ✅ 已迁移 (改进) |
+| **键盘管理** | `DrawToolCore.initDrawToolCore()` | `core/KeyboardManager.ts` | ✅ 已重构 |
+| **Zoom/Slice滚轮** | `DrawToolCore.configMouseZoomWheel` | `tools/ZoomTool.ts` | ✅ 已迁移 |
+| **PAN** | `DrawToolCore.handleOnPanMouseMove` | `tools/PanTool.ts` | ✅ 已迁移 |
+| **Contrast 调节** | `DrawToolCore.configContrastDragMode()` | `tools/ContrastTool.ts` | ✅ 已迁移 |
 | **拖动切换 slice** | `DragOperator.ts` | 保留或整合到 `SegmentationManager` | 保留 |
 | **渲染** | `DrawToolCore.drawMaskToLabelCtx()` | `rendering/MaskRenderer.ts` | 重构 |
 | **对外 API** | `NrrdTools.getMaskData()`, `setMasksData()` | `SegmentationManager.ts` | 重构 |

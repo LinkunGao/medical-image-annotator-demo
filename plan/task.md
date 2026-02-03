@@ -90,53 +90,65 @@
 ## Phase 3: Tool Abstraction
 
 ### 3.1 BaseTool
-- [ ] `tools/BaseTool.ts` - 抽象接口定义
-- [ ] `ToolContext` 接口 (layerManager, undoManager, sizeFactor...)
-- [ ] 坐标转换: `screenToOriginal()` / `originalToScreen()`
+- [x] `tools/BaseTool.ts` - 抽象接口定义
+- [x] `ToolContext` 接口 (layerManager, undoManager, sizeFactor...)
+- [x] 坐标转换: `screenToOriginal()` / `originalToScreen()`
 
 ### 3.2 PencilTool ⭐
-- [ ] `tools/PencilTool.ts` - 多边形自动填充
-- [ ] 拖动时画红色轮廓预览
-- [ ] 松开时闭合路径并填充
+- [x] `tools/PencilTool.ts` - 多边形自动填充
+- [x] 拖动时画红色轮廓预览
+- [x] 松开时闭合路径并填充
 
 ### 3.3 BrushTool
-- [ ] `tools/BrushTool.ts` - 连续圆形笔刷
-- [ ] 预览圆形光标
-- [ ] 拖动时连续填充
+- [x] `tools/BrushTool.ts` - 连续圆形笔刷
+- [x] 预览圆形光标
+- [x] 拖动时连续填充
 
 ### 3.4 EraserTool
-- [ ] `tools/EraserTool.ts` - 橡皮擦
-- [ ] 仅擦除当前 layer
+- [x] `tools/EraserTool.ts` - 橡皮擦
+- [x] 仅擦除当前 layer
 
 ### 3.5 PanTool
-- [ ] `tools/PanTool.ts` - 右键平移画布
+- [x] `tools/PanTool.ts` - 右键平移画布
 
 ### 3.6 ZoomTool
-- [ ] `tools/ZoomTool.ts` - 滚轮缩放 / Slice 切换
+- [x] `tools/ZoomTool.ts` - 滚轮缩放 / Slice 切换
 
 ### 3.7 ContrastTool
-- [ ] `tools/ContrastTool.ts` - Ctrl 调节 window center/width
+- [x] `tools/ContrastTool.ts` - Ctrl 调节 window center/width
 
+### 3.8 SphereTool ⭐
+- [x] `tools/SphereTool.ts` - 3D 球体放置工具
+- [x] 点击放置中心 + 滚轮调节半径 [1, 50]
+- [x] 初始半径: 3
+- [x] 松开时 3D 球体写入多 slice (spherical / linear 两种衰减模式)
+- [x] 4 种类型: tumour / skin / nipple / ribcage 独立位置
+- [x] 跨轴坐标转换 via SphereAdapter.convertCursorPoint()
+- [x] 回调通知: onSpherePlaced / onCalculatorPositionsUpdated
+
+- [x] **🧪 Unit Tests: 67 tests passed (tools.test.ts)** ✅
 - [ ] **🧪 User Testing: Pencil 画闭合区域并验证自动填充**
 - [ ] **🧪 User Testing: Brush 涂抹并验证连续圆形叠加**
+- [ ] **🧪 User Testing: Sphere 放置并验证跨 slice 数据**
 
 ---
 
 ## Phase 4: Rendering Pipeline
 
 ### 4.1 Canvas Setup
-- [ ] 精简为 3 个 Canvas: displayCanvas, drawingLayer, maskDisplayCanvas
-- [ ] 移除旧的 8 个 Canvas
+- [x] 精简为 3 个 Canvas: displayCanvas, drawingLayer, maskDisplayCanvas
+- [ ] 移除旧的 8 个 Canvas (Phase 6 Integration)
 
 ### 4.2 MaskRenderer
-- [ ] `rendering/MaskRenderer.ts` - 从 Uint8Array 渲染到 Canvas
-- [ ] 实现 `render()` - 按 visibility 设置渲染
-- [ ] 实现脏区域追踪优化 (dirtyRects)
+- [x] `rendering/MaskRenderer.ts` - 从 Uint8Array 渲染到 Canvas
+- [x] 实现 `render()` - 按 visibility 设置渲染
+- [x] 实现脏区域追踪优化 (dirtyRects)
 
 ### 4.3 Animation Loop
-- [ ] `requestAnimationFrame` 渲染循环
-- [ ] 仅在数据变化时重绘
+- [x] `requestAnimationFrame` 渲染循环
+- [x] 仅在数据变化时重绘
 
+- [x] **🧪 Unit Tests: 45 tests passed (rendering.test.ts)** ✅
 - [ ] **🧪 User Testing: 验证 3 层 Canvas 正确显示**
 - [ ] **🧪 User Testing: 验证缩放后画笔坐标正确**
 
