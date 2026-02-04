@@ -10,7 +10,7 @@
  * @module composables/left-panel/useDistanceCalculation
  */
 import { ref, type Ref } from "vue";
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import {
     ISaveSphere,
     IToolSphereData,
@@ -25,6 +25,7 @@ import emitter from "@/plugins/custom-emitter";
  */
 export interface IDistanceCalculationDeps {
     nrrdTools: Ref<Copper.NrrdTools | undefined>;
+    segmentationManager?: Ref<Copper.SegmentationManager | undefined>;  // Phase 7
     currentCaseName: Ref<string>;
 }
 
@@ -32,7 +33,7 @@ export interface IDistanceCalculationDeps {
  * Composable for distance calculations
  */
 export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
-    const { nrrdTools, currentCaseName } = deps;
+    const { nrrdTools, segmentationManager, currentCaseName } = deps;
 
     /** Distance to Skin in mm */
     const dts = ref(0);
@@ -44,20 +45,40 @@ export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
     const showCalculatorValue = ref(false);
 
     /**
-     * Handles sphere data from drawing tool
+     * Phase 7: Helper to get voxelSpacing - prefers SegmentationManager, falls back to NrrdTools
      */
+    const getVoxelSpacing = (): number[] => {
+        if (segmentationManager?.value?.isInitialized()) {
+            return segmentationManager.value.getVoxelSpacing();
+        }
+        return nrrdTools.value!.nrrd_states.voxelSpacing;
+    };
+
+    /**
+     * Phase 7: Helper to get spaceOrigin - prefers SegmentationManager, falls back to NrrdTools
+     */
+    const getSpaceOrigin = (): number[] => {
+        if (segmentationManager?.value?.isInitialized()) {
+            return segmentationManager.value.getSpaceOrigin();
+        }
+        return nrrdTools.value!.nrrd_states.spaceOrigin;
+    };
+
     const getSphereData = async (res: IToolSphereData) => {
         const { sphereOrigin, sphereRadius } = res;
+        const spacing = getVoxelSpacing();
+        const origin = getSpaceOrigin();
+
         const sphereData: ISaveSphere = {
             caseId: currentCaseName.value,
             sliceId: sphereOrigin[2],
-            origin: nrrdTools.value!.nrrd_states.spaceOrigin,
-            spacing: nrrdTools.value!.nrrd_states.voxelSpacing,
+            origin,
+            spacing,
             sphereRadiusMM: sphereRadius,
             sphereOriginMM: [
                 sphereOrigin[0],
                 sphereOrigin[1],
-                sphereOrigin[2] * nrrdTools.value!.nrrd_states.voxelSpacing[2],
+                sphereOrigin[2] * spacing[2],
             ],
         };
 
@@ -81,7 +102,7 @@ export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
             aix,
         } = res;
 
-        const spacing = nrrdTools.value!.nrrd_states.voxelSpacing;
+        const spacing = getVoxelSpacing();
 
         if (tumourSphereOrigin === null) {
             return;

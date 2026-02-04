@@ -53,12 +53,13 @@
 │                                                               │
 │ 完成后: 用户交互功能使用新系统                                │
 ├─────────────────────────────────────────────────────────────┤
-│ Phase 4: UI 层迁移 (Step 8-10)                              │
+│ Phase 4: UI 层迁移 (Step 8-10b)                             │
 │ - 迁移 OperationCtl.vue (工具选择)                           │
 │ - 迁移 Calculator.vue (计算器)                               │
 │ - 迁移 OperationAdvance.vue (高级设置)                       │
+│ - 🆕 新增 Layer/Channel 选择 UI                              │
 │                                                               │
-│ 完成后: UI 组件使用 StateManager                             │
+│ 完成后: UI 组件使用 StateManager + Layer/Channel 管理        │
 ├─────────────────────────────────────────────────────────────┤
 │ Phase 5: 清理 (Step 11-12)                                  │
 │ - 全面测试所有功能                                            │
@@ -412,6 +413,57 @@ const handleAllImagesLoaded = async (res: IToolAfterLoadImagesResponse) => {
 
 ---
 
+### Step 10b: 新增 Layer/Channel 选择 UI 🆕 (待开始)
+
+**目标**: 在 Function Controller 下方新增 UI，支持 Layer/Channel 选择、可见性控制、绘制联动
+
+**类型**: ✨ 新功能（利用新架构的 VisibilityManager + LayerManager）
+
+#### 架构关系
+
+```
+Layer (容器，不带颜色)
+├── Channel 0 (独立颜色)
+├── Channel 1 (独立颜色)
+├── Channel 2 (独立颜色)
+├── ...
+└── Channel 8 (独立颜色)
+```
+
+- Layer 是 Channel 的容器，本身不带颜色
+- 每个 Channel 有独立的颜色标识
+- 旧系统 label1(绿)/label2(红)/label3(蓝) 对应新架构中同一 Layer 下的不同 Channel
+
+#### 功能需求
+
+1. **Layer 选择**
+   - 选择当前激活的 layer (layer1/layer2/layer3)
+   - 每个 layer 支持显示/隐藏切换（控制该 layer 下所有 channel）
+
+2. **Channel 选择**
+   - 选择当前激活的 channel (0-8)
+   - 每个 channel 有独立颜色标识
+   - 每个 channel 支持显示/隐藏切换
+   - 选择 channel 后，pencil/brush/eraser 绘制到该 layer 的该 channel
+
+3. **可见性控制**
+   - Layer 级别: `visibilityManager.setLayerVisible(layerId, visible)`
+   - Channel 级别: `visibilityManager.setChannelVisible(layerId, channel, visible)`
+   - 订阅变化回调: `visibilityManager.onChange(callback)`
+
+4. **编辑联动**
+   - 选择 layer + channel → 更新绘制工具的目标
+   - 与 StateManager 同步当前激活的 layer/channel
+
+#### 实现方案 (待细化)
+
+- **新增组件**: `LayerChannelSelector.vue`
+- **新增 Composable**: `useLayerChannel.ts`
+- **集成位置**: `OperationCtl.vue` → `#FunctionalControl` 下方或新增 slot
+- **UI 形式**: Layer 用 tab/radio, Channel 用网格按钮, 可见性用眼睛图标
+
+---
+
 ## Phase 5: 清理 (Step 11-12)
 
 ### Step 11: 全面测试 ⏳ (待开始)
@@ -467,9 +519,9 @@ const handleAllImagesLoaded = async (res: IToolAfterLoadImagesResponse) => {
 | Phase 1: 基础设施 | 3 | 1 (待验证) | 33% |
 | Phase 2: 数据层 | 2 | 0 | 0% |
 | Phase 3: 交互层 | 2 | 0 | 0% |
-| Phase 4: UI 层 | 3 | 0 | 0% |
+| Phase 4: UI 层 | 4 | 0 | 0% |
 | Phase 5: 清理 | 2 | 0 | 0% |
-| **总计** | **12** | **1** | **8%** |
+| **总计** | **13** | **1** | **8%** |
 
 ---
 

@@ -7,10 +7,12 @@
  * - Setting mask data from backend
  * - Replacing/clearing mask data
  *
+ * Phase 7: Added SegmentationManager data sync support
+ *
  * @module composables/left-panel/useMaskOperations
  */
 import { ref, type Ref } from "vue";
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import {
     IStoredMasks,
     IReplaceMask,
@@ -29,6 +31,7 @@ import emitter from "@/plugins/custom-emitter";
  */
 export interface IMaskOperationsDeps {
     nrrdTools: Ref<Copper.NrrdTools | undefined>;
+    segmentationManager?: Ref<Copper.SegmentationManager | undefined>;  // Phase 7
     loadingContainer: Ref<HTMLDivElement | undefined>;
     progress: Ref<HTMLDivElement | undefined>;
     loadBarMain: Ref<Copper.loadingBarType | undefined>;
@@ -45,6 +48,7 @@ export interface IMaskOperationsDeps {
 export function useMaskOperations(deps: IMaskOperationsDeps) {
     const {
         nrrdTools,
+        segmentationManager,  // Phase 7
         loadingContainer,
         progress,
         loadBarMain,
@@ -54,6 +58,51 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
         originUrls,
         regiterUrls,
     } = deps;
+
+    /**
+     * Phase 7: Convert backend mask JSON (label1/label2/label3) to
+     * SegmentationManager format (ImportMaskData: layer1/layer2/layer3)
+     */
+    const syncMaskDataToSegmentationManager = (backendData: any) => {
+        if (!segmentationManager?.value || !backendData) return;
+
+        try {
+            const convertLabel = (labelData: any[], layerId: 'layer1' | 'layer2' | 'layer3'): Copper.ExportMaskData[] => {
+                if (!Array.isArray(labelData)) return [];
+                const result: Copper.ExportMaskData[] = [];
+                for (const slice of labelData) {
+                    if (slice.data && slice.data.length > 0) {
+                        result.push({
+                            layer: layerId,
+                            axis: 'z',
+                            sliceIndex: slice.sliceIndex ?? 0,
+                            width: slice.width ?? 0,
+                            height: slice.height ?? 0,
+                            voxelSpacing: slice.voxelSpacing ?? [],
+                            spaceOrigin: slice.spaceOrigin ?? [],
+                            data: slice.data,
+                        });
+                    }
+                }
+                return result;
+            };
+
+            const importData: Copper.ImportMaskData = {
+                layer1: convertLabel(backendData['label1'], 'layer1'),
+                layer2: convertLabel(backendData['label2'], 'layer2'),
+                layer3: convertLabel(backendData['label3'], 'layer3'),
+            };
+
+            segmentationManager.value.setMasksData(importData);
+            console.log('[Phase 7 - Step 4] Mask data synced to SegmentationManager:', {
+                layer1Slices: importData.layer1.length,
+                layer2Slices: importData.layer2.length,
+                layer3Slices: importData.layer3.length,
+            });
+        } catch (err) {
+            console.warn('[Phase 7 - Step 4] Failed to sync mask data to SegmentationManager:', err);
+        }
+    };
 
     /**
      * Sends initial mask data to backend
@@ -106,6 +155,9 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
                     sendInitMaskToBackend();
                 }
                 nrrdTools.value!.setMasksData(data, loadBarMain.value);
+
+                // Phase 7: Sync loaded mask data to SegmentationManager
+                syncMaskDataToSegmentationManager(data);
             }
         };
         xhr.send();

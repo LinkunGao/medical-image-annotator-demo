@@ -56,7 +56,7 @@
  * @emits update:mouseDragContrast - On contrast adjustment via drag
  */
 // import * as Copper from "copper3d";
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import "copper3d/dist/css/style.css";
 import { GUI, GUIController } from "dat.gui";
 import { ref, onMounted, onUnmounted, onBeforeUnmount, watch, watchEffect } from "vue";
@@ -88,6 +88,8 @@ let gui = new GUI({ width: 300, autoPlace: false });
 let appRenderer: Copper.copperRenderer;
 /** NrrdTools instance for 2D slice interaction */
 let nrrdTools: Copper.NrrdTools;
+/** Phase 7: SegmentationManager instance (new refactored segmentation module) */
+let segmentationManager: Copper.SegmentationManager;
 /** Copper3D scene instance */
 let scene: Copper.copperScene;
 /** Loading bar animation container */
@@ -207,6 +209,31 @@ function initCopper() {
     nrrdTools.setPencilIconUrls(cursorUrls);
     // nrrdTools.setMainAreaSize(3);
 
+    // Phase 7: Create SegmentationManager instance (parallel with NrrdTools for migration)
+    segmentationManager = new Copper.SegmentationManager();
+    console.log('[Phase 7 - Step 1] SegmentationManager created:', segmentationManager);
+
+    // Phase 7 - Step 2: Configure RenderingAdapter
+    segmentationManager.setRenderingAdapter({
+        getMaskDisplayContext: () => {
+            // Access displayCtx from NrrdTools' protectedData
+            return nrrdTools.protectedData?.ctxes?.displayCtx || null;
+        },
+        getDrawingContext: () => {
+            // Access drawingCtx from NrrdTools' protectedData
+            return nrrdTools.protectedData?.ctxes?.drawingCtx || null;
+        },
+        getDrawingCanvas: () => {
+            // Use existing NrrdTools method
+            return nrrdTools.getDrawingCanvas() || null;
+        },
+        requestRender: () => {
+            // Trigger NrrdTools render
+            nrrdTools.redrawDisplayCanvas();
+        },
+    });
+    console.log('[Phase 7 - Step 2] RenderingAdapter configured');
+
     // sphere plan b
     toolNrrdStates = nrrdTools.getNrrdToolsSettings();
     // toolsState.spherePlanB = false;
@@ -226,6 +253,7 @@ function initCopper() {
     emit("update:finishedCopperInit", {
         appRenderer,
         nrrdTools,
+        segmentationManager,  // Phase 7: Pass segmentationManager alongside nrrdTools
         scene,
     });
 }

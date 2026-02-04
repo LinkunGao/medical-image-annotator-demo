@@ -34,6 +34,8 @@ import {
   type GUIState,
   type StateChangeListener,
   type PartialStateUpdate,
+  type ImportMaskData,
+  type ExportMaskData,
 } from "./Utils/segmentation";
 
 import { Copper3dTrackballControls } from "./Controls/Copper3dTrackballControls";
@@ -117,4 +119,6 @@ export type {
   GUIState,
   StateChangeListener,
   PartialStateUpdate,
+  ImportMaskData,
+  ExportMaskData,
 };

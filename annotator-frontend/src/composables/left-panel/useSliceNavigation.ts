@@ -10,20 +10,21 @@
  * @module composables/left-panel/useSliceNavigation
  */
 import { ref, type Ref } from "vue";
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 
 /**
  * Interface for slice navigation dependencies
  */
 export interface ISliceNavigationDeps {
     nrrdTools: Ref<Copper.NrrdTools | undefined>;
+    segmentationManager?: Ref<Copper.SegmentationManager | undefined>;  // Phase 7
 }
 
 /**
  * Composable for slice navigation
  */
 export function useSliceNavigation(deps: ISliceNavigationDeps) {
-    const { nrrdTools } = deps;
+    const { nrrdTools, segmentationManager } = deps;
 
     /** Maximum slice number */
     const max = ref(0);
