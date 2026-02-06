@@ -51,7 +51,7 @@ import {
   type LayerId,
   type ChannelValue,
   CHANNEL_COLORS,
-} from "./Utils/segmentation";
+} from "./Utils/segmentation/manager/index";
 
 import { Copper3dTrackballControls } from "./Controls/Copper3dTrackballControls";
 
