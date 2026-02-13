@@ -19,6 +19,7 @@ export class CommToolsData {
 
   // Cache for MaskVolume slice reads to improve performance
   private sliceImageCache: Map<string, ImageData> = new Map();
+  private _prewarmTimer: ReturnType<typeof setTimeout> | undefined;
 
   nrrd_states: INrrdStates = {
     originWidth: 0,
@@ -498,7 +499,66 @@ export class CommToolsData {
    * Called when clearing all masks or switching datasets.
    */
   clearAllSliceCache(): void {
+    if (this._prewarmTimer !== undefined) {
+      clearTimeout(this._prewarmTimer);
+      this._prewarmTimer = undefined;
+    }
     this.sliceImageCache.clear();
+  }
+
+  /**
+   * Pre-warm the slice cache for a given axis in the background.
+   * Uses setTimeout(0) batches to avoid blocking the UI thread.
+   *
+   * @param axis - Axis to pre-warm: "x", "y", or "z"
+   */
+  prewarmCacheForAxis(axis: "x" | "y" | "z"): void {
+    // Cancel any pending pre-warm
+    if (this._prewarmTimer !== undefined) {
+      clearTimeout(this._prewarmTimer);
+      this._prewarmTimer = undefined;
+    }
+
+    const layers = ["layer1", "layer2", "layer3"] as const;
+    let maxSlice: number;
+    try {
+      const vol = this.getVolumeForLayer("layer1");
+      const dims = vol.getDimensions();
+      maxSlice = axis === "x" ? dims.width : axis === "y" ? dims.height : dims.depth;
+    } catch {
+      return; // Volume not ready
+    }
+
+    if (maxSlice <= 1) return;
+
+    const BATCH_SIZE = 10;
+    let current = 0;
+
+    const warmBatch = () => {
+      const end = Math.min(current + BATCH_SIZE, maxSlice);
+      for (let s = current; s < end; s++) {
+        for (const layer of layers) {
+          const cacheKey = `${layer}_${axis}_${s}`;
+          if (!this.sliceImageCache.has(cacheKey)) {
+            try {
+              const volume = this.getVolumeForLayer(layer);
+              if (volume) {
+                const imageData = volume.getSliceRawImageData(s, axis);
+                this.sliceImageCache.set(cacheKey, imageData);
+              }
+            } catch { /* skip invalid slices */ }
+          }
+        }
+      }
+      current = end;
+      if (current < maxSlice) {
+        this._prewarmTimer = setTimeout(warmBatch, 0);
+      } else {
+        this._prewarmTimer = undefined;
+      }
+    };
+
+    this._prewarmTimer = setTimeout(warmBatch, 0);
   }
 
   /**

@@ -391,18 +391,41 @@ export class MaskVolume {
     }
     this.validateSliceIndex(sliceIndex, axis);
 
+    const { width, height } = this.dims;
+    const ch = this.numChannels;
     const [sliceWidth, sliceHeight] = this.getSliceDimensions(axis);
     const imageData = new ImageData(sliceWidth, sliceHeight);
     const pixels = imageData.data;
+    const volData = this.data;
 
-    for (let j = 0; j < sliceHeight; j++) {
-      for (let i = 0; i < sliceWidth; i++) {
-        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
-        const px = (j * sliceWidth + i) * 4;
-        pixels[px] = this.data[this.getIndex(vx, vy, vz, 0)]; // R
-        pixels[px + 1] = this.data[this.getIndex(vx, vy, vz, 1)]; // G
-        pixels[px + 2] = this.data[this.getIndex(vx, vy, vz, 2)]; // B
-        pixels[px + 3] = this.data[this.getIndex(vx, vy, vz, 3)]; // A
+    if (axis === 'z') {
+      // Z-axis (axial): slice data is contiguous in memory — direct bulk copy
+      const offset = sliceIndex * this.bytesPerSlice;
+      pixels.set(volData.subarray(offset, offset + this.bytesPerSlice));
+    } else if (axis === 'y') {
+      // Y-axis (coronal): each row (fixed z, fixed y, varying x) is contiguous
+      // mapping: (i → x, sliceIndex → y, j → z)
+      const rowBytes = width * ch;
+      let px = 0;
+      for (let j = 0; j < sliceHeight; j++) {
+        const rowStart = j * height * width * ch + sliceIndex * width * ch;
+        pixels.set(volData.subarray(rowStart, rowStart + rowBytes), px);
+        px += rowBytes;
+      }
+    } else {
+      // X-axis (sagittal): pixels not contiguous, but avoid function call overhead
+      // mapping: (sliceIndex → x, i → y, j → z)
+      let px = 0;
+      for (let j = 0; j < sliceHeight; j++) {
+        const zOffset = j * height * width * ch;
+        for (let i = 0; i < sliceWidth; i++) {
+          const baseIdx = zOffset + i * width * ch + sliceIndex * ch;
+          pixels[px] = volData[baseIdx];
+          pixels[px + 1] = volData[baseIdx + 1];
+          pixels[px + 2] = volData[baseIdx + 2];
+          pixels[px + 3] = volData[baseIdx + 3];
+          px += 4;
+        }
       }
     }
 

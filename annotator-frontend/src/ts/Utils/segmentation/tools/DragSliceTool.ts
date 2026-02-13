@@ -194,23 +194,20 @@ export class DragSliceTool extends BaseTool {
       if (volume === volumes.layer2) layerName = "layer2";
       else if (volume === volumes.layer3) layerName = "layer3";
 
-      // Get cached slice data (much faster!)
+      // Get cached slice data
       const imageData = this.callbacks.getCachedSliceImageData(layerName, axis, sliceIndex);
 
       if (!imageData) return;
 
-      // Quick check for non-zero pixels (only first 256 pixels for speed)
-      if (this.hasNonZeroPixels(imageData)) {
-        this.callbacks.setEmptyCanvasSize();
-        this.ctx.protectedData.ctxes.emptyCtx.putImageData(imageData, 0, 0);
-        ctx.drawImage(
-          this.ctx.protectedData.canvases.emptyCanvas,
-          0,
-          0,
-          this.ctx.nrrd_states.changedWidth,
-          this.ctx.nrrd_states.changedHeight
-        );
-      }
+      this.callbacks.setEmptyCanvasSize();
+      this.ctx.protectedData.ctxes.emptyCtx.putImageData(imageData, 0, 0);
+      ctx.drawImage(
+        this.ctx.protectedData.canvases.emptyCanvas,
+        0,
+        0,
+        this.ctx.nrrd_states.changedWidth,
+        this.ctx.nrrd_states.changedHeight
+      );
     } catch (err) {
       // Slice out of bounds or volume not ready - skip silently
       console.warn(`Failed to draw mask layer for slice ${sliceIndex}:`, err);
@@ -256,18 +253,6 @@ export class DragSliceTool extends BaseTool {
       width,
       height
     );
-  }
-
-  private hasNonZeroPixels(imageData: ImageData): boolean {
-    const data = imageData.data;
-    // Quick check: only scan first 256 pixels for performance
-    const limit = Math.min(256 * 4, data.length);
-    for (let i = 0; i < limit; i += 4) {
-      if (data[i] !== 0 || data[i+1] !== 0 || data[i+2] !== 0 || data[i+3] !== 0) {
-        return true;
-      }
-    }
-    return false;
   }
 
   // ===== Canvas Cleanup =====

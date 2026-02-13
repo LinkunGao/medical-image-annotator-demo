@@ -33,6 +33,8 @@ export class NrrdTools extends DrawToolCore {
   private initState: boolean = true;
   private preTimer: any;
   private guiParameterSettings: IGuiParameterSettings | undefined;
+  private _sliceRAFId: number | null = null;
+  private _pendingSliceStep: number = 0;
 
   constructor(container: HTMLDivElement) {
     super(container);
@@ -217,12 +219,16 @@ export class NrrdTools extends DrawToolCore {
     // Phase 2 Day 9: Re-initialize MaskVolume with real NRRD dimensions.
     // This replaces the 1×1×1 placeholders from CommToolsData constructor
     // and "turns on" all Day 7/8 volume read/write paths.
+    // Clear stale cache from previous case before creating new volumes
+    this.clearAllSliceCache();
     const [vw, vh, vd] = this.nrrd_states.dimensions;
     this.protectedData.maskData.volumes = {
       layer1: new MaskVolume(vw, vh, vd, 4),
       layer2: new MaskVolume(vw, vh, vd, 4),
       layer3: new MaskVolume(vw, vh, vd, 4),
     };
+    // Pre-warm cache for the default axis (z) in the background
+    this.prewarmCacheForAxis(this.protectedData.axis);
 
     this.nrrd_states.spaceOrigin = (
       randomSlice.x.volume.header.space_origin as number[]
@@ -278,6 +284,8 @@ export class NrrdTools extends DrawToolCore {
     masksData: storeExportPaintImageType,
     loadingBar?: loadingBarType
   ) {
+    console.log("setMask data", masksData);
+    
     if (!!masksData) {
       this.nrrd_states.loadMaskJson = true;
       if (loadingBar) {
@@ -465,7 +473,7 @@ export class NrrdTools extends DrawToolCore {
    *  */
   setSliceOrientation(axisTo: "x" | "y" | "z") {
     let convetObj;
-
+    console.log("switch to axis:", axisTo);
     if (this.nrrd_states.enableCursorChoose || this.gui_states.sphere) {
       if (this.protectedData.axis === "z") {
         this.cursorPage.z.index = this.nrrd_states.currentIndex;
@@ -607,6 +615,8 @@ export class NrrdTools extends DrawToolCore {
 
     this.protectedData.axis = axisTo;
     this.resetDisplaySlicesStatus();
+    // Pre-warm cache for the new axis in the background
+    this.prewarmCacheForAxis(axisTo);
     // for sphere plan a
     if (this.gui_states.sphere && !this.nrrd_states.spherePlanB) {
       this.drawSphere(
@@ -682,10 +692,22 @@ export class NrrdTools extends DrawToolCore {
 
   setSliceMoving(step: number) {
     if (this.protectedData.mainPreSlices) {
-      this.protectedData.Is_Draw = true;
-      this.setSyncsliceNum();
-      this.dragOperator.updateIndex(step);
-      this.setIsDrawFalse(1000);
+      // Accumulate steps so no keydown events are lost
+      this._pendingSliceStep += step;
+
+      // RAF throttle: render at most once per frame, but apply ALL accumulated steps
+      if (this._sliceRAFId !== null) return;
+
+      this._sliceRAFId = requestAnimationFrame(() => {
+        this._sliceRAFId = null;
+        const totalStep = this._pendingSliceStep;
+        this._pendingSliceStep = 0;
+
+        this.protectedData.Is_Draw = true;
+        this.setSyncsliceNum();
+        this.dragOperator.updateIndex(totalStep);
+        this.setIsDrawFalse(1000);
+      });
     }
   }
 
@@ -1049,7 +1071,17 @@ export class NrrdTools extends DrawToolCore {
    */
   private reloadMasksFromVolume(): void {
     const axis = this.protectedData.axis;
-    const sliceIndex = this.nrrd_states.currentIndex;
+    let sliceIndex = this.nrrd_states.currentIndex;
+
+    // Clamp sliceIndex to valid range for current axis
+    // (currentIndex may not be updated yet when switching axes)
+    try {
+      const vol = this.getVolumeForLayer("layer1");
+      const dims = vol.getDimensions();
+      const maxSlice = axis === "x" ? dims.width : axis === "y" ? dims.height : dims.depth;
+      if (sliceIndex >= maxSlice) sliceIndex = maxSlice - 1;
+      if (sliceIndex < 0) sliceIndex = 0;
+    } catch { /* volume not ready */ }
 
     // Save current layer
     const originalLayer = this.gui_states.layer;
@@ -1096,36 +1128,15 @@ export class NrrdTools extends DrawToolCore {
     // Clear the layer canvas first
     ctx.clearRect(0, 0, this.nrrd_states.changedWidth, this.nrrd_states.changedHeight);
 
-    // Get imageData from cache (uses CommToolsData.sliceImageCache)
-    const volume = this.getCurrentVolume();
-    if (!volume) return;
-
     try {
-      // Check cache first
-      const cacheKey = `${this.gui_states.layer}_${axis}_${sliceIndex}`;
-      let imageData = (this as any).sliceImageCache?.get(cacheKey);
+      // Use the proper cache accessor from CommToolsData
+      const imageData = this.getCachedSliceImageData(
+        this.gui_states.layer,
+        axis,
+        sliceIndex
+      );
 
-      if (!imageData) {
-        // Cache miss - read from volume
-        imageData = volume.getSliceRawImageData(sliceIndex, axis);
-        // Store in cache
-        if ((this as any).sliceImageCache) {
-          (this as any).sliceImageCache.set(cacheKey, imageData);
-        }
-      }
-
-      // Quick check for non-zero pixels (only first 256 pixels)
-      const data = imageData.data;
-      let hasData = false;
-      const checkLimit = Math.min(data.length, 1024);
-      for (let i = 0; i < checkLimit; i += 4) {
-        if (data[i] !== 0 || data[i+1] !== 0 || data[i+2] !== 0 || data[i+3] !== 0) {
-          hasData = true;
-          break;
-        }
-      }
-
-      if (hasData) {
+      if (imageData) {
         this.setEmptyCanvasSize();
         this.protectedData.ctxes.emptyCtx.putImageData(imageData, 0, 0);
         ctx.drawImage(
