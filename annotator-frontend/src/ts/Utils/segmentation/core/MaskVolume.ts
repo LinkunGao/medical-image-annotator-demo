@@ -525,6 +525,7 @@ export class MaskVolume {
   // ── Label-based storage (1-channel volumes) ────────────────────────
 
   /**
+  /**
    * Store label data from canvas RGBA ImageData into a 1-channel volume.
    *
    * For each pixel: matches the RGB color against MASK_CHANNEL_COLORS to
@@ -537,12 +538,16 @@ export class MaskVolume {
    * @param imageData      Canvas ImageData (RGBA) to convert.
    * @param axis           `'x'`, `'y'`, or `'z'`.
    * @param activeChannel  Fallback label for pixels whose RGB doesn't match any channel (1-8).
+   * @param channelVisible Optional map of visible channels (true=visible, false=hidden).
+   *                       If provided, data for hidden channels will be preserved
+   *                       when the canvas pixel is transparent.
    */
   setSliceLabelsFromImageData(
     sliceIndex: number,
     imageData: ImageData,
     axis: 'x' | 'y' | 'z' = 'z',
     activeChannel: number = 1,
+    channelVisible?: Record<number, boolean>,
   ): void {
     this.validateSliceIndex(sliceIndex, axis);
 
@@ -572,7 +577,18 @@ export class MaskVolume {
         const alpha = pixels[px + 3];
 
         if (alpha < ALPHA_THRESHOLD) {
-          // Transparent or semi-transparent fringe → background label
+          // Transparent or semi-transparent fringe
+
+          if (channelVisible) {
+            // Check existing value in the volume
+            const existingLabel = this.data[this.getIndex(vx, vy, vz, 0)];
+            // If existing label belongs to a hidden channel, PRESERVE IT
+            if (existingLabel !== 0 && channelVisible[existingLabel] === false) {
+              continue; // Skip overwrite, keeping the hidden channel's data
+            }
+          }
+
+          // Otherwise, clear it (background label)
           this.data[this.getIndex(vx, vy, vz, 0)] = 0;
           continue;
         }

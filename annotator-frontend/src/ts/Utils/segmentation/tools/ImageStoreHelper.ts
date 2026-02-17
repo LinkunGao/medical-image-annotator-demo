@@ -99,7 +99,7 @@ export class ImageStoreHelper extends BaseTool {
         const dims = volume.getDimensions();
         const [w, h] = axis === 'z' ? [dims.width, dims.height]
           : axis === 'y' ? [dims.width, dims.depth]
-          : [dims.height, dims.depth];
+            : [dims.height, dims.depth];
         const imageData = new ImageData(w, h);
         const channelVis = this.ctx.gui_states.channelVisibility[this.ctx.gui_states.layer];
         volume.renderLabelSliceInto(sliceIndex, axis, imageData, channelVis);
@@ -141,11 +141,15 @@ export class ImageStoreHelper extends BaseTool {
       const volume = this.getVolumeForLayer(layer);
       if (volume) {
         const activeChannel = this.ctx.gui_states.activeChannel || 1;
+        // Phase 4 Fix: Pass channel visibility map to preserve hidden channels
+        const channelVis = this.ctx.gui_states.channelVisibility[layer];
+
         volume.setSliceLabelsFromImageData(
           index,
           imageData,
           this.ctx.protectedData.axis,
-          activeChannel
+          activeChannel,
+          channelVis
         );
       }
     } catch (err) {
@@ -185,8 +189,11 @@ export class ImageStoreHelper extends BaseTool {
       const volume = this.getVolumeForLayer(layer);
       if (volume) {
         const activeChannel = this.ctx.gui_states.activeChannel || 1;
+        // Phase 4 Fix: Pass channel visibility map to preserve hidden channels
+        const channelVis = this.ctx.gui_states.channelVisibility[layer];
+
         volume.setSliceLabelsFromImageData(
-          index, imageData, this.ctx.protectedData.axis, activeChannel
+          index, imageData, this.ctx.protectedData.axis, activeChannel, channelVis
         );
       }
     } catch {
@@ -360,7 +367,7 @@ export class ImageStoreHelper extends BaseTool {
     const dims = volume.getDimensions();
     const [w, h] = axis === 'z' ? [dims.width, dims.height]
       : axis === 'y' ? [dims.width, dims.depth]
-      : [dims.height, dims.depth];
+        : [dims.height, dims.depth];
     const channelVis = this.ctx.gui_states.channelVisibility[this.ctx.gui_states.layer];
 
     // Check previous slices
