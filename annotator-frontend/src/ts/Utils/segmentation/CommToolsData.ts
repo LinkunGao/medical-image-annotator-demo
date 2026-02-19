@@ -83,13 +83,16 @@ export class CommToolsData {
     },
 
     getMask: (
-      mask: ImageData,
-      sliceId: number,
-      layer: string,
+      sliceData: Uint8Array,
+      layerId: string,
+      channelId: number,
+      sliceIndex: number,
+      axis: "x" | "y" | "z",
       width: number,
       height: number,
-      clearAllFlag: boolean
+      clearFlag: boolean
     ) => { },
+    onClearLayerVolume: (layerId: string) => { },
     getSphere: (sphereOrigin: number[], sphereRadius: number) => { },
     getCalculateSpherePositions: (tumourSphereOrigin: ICommXYZ | null, skinSphereOrigin: ICommXYZ | null, ribSphereOrigin: ICommXYZ | null, nippleSphereOrigin: ICommXYZ | null, aixs: "x" | "y" | "z") => { },
     drawStartPos: { x: 1, y: 1 },

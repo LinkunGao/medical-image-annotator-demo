@@ -236,13 +236,16 @@ interface INrrdStates {
   keyboardSettings: IKeyBoardSettings;
 
   getMask: (
-    mask: ImageData,
-    sliceId: number,
-    layer: string,
+    sliceData: Uint8Array,
+    layerId: string,
+    channelId: number,
+    sliceIndex: number,
+    axis: "x" | "y" | "z",
     width: number,
     height: number,
-    clearAllFlag: boolean
+    clearFlag: boolean
   ) => void;
+  onClearLayerVolume: (layerId: string) => void;
   getSphere: (sphereOrigin: number[], sphereRadius: number) => void;
   getCalculateSpherePositions: (tumourSphereOrigin: ICommXYZ | null, skinSphereOrigin: ICommXYZ | null, ribSphereOrigin: ICommXYZ | null, nippleSphereOrigin: ICommXYZ | null, aixs: "x" | "y" | "z") => void,
   drawStartPos: ICommXY;
@@ -255,13 +258,16 @@ interface IDragOpts {
 
 interface IDrawOpts {
   getMaskData?: (
-    mask: ImageData,
-    sliceId: number,
-    layer: string,
+    sliceData: Uint8Array,
+    layerId: string,
+    channelId: number,
+    sliceIndex: number,
+    axis: "x" | "y" | "z",
     width: number,
     height: number,
-    clearAllFlag?: boolean
+    clearFlag?: boolean
   ) => void;
+  onClearLayerVolume?: (layerId: string) => void;
   getSphereData?: (sphereOrigin: number[], sphereRadius: number) => void;
   getCalculateSpherePositionsData?: (tumourSphereOrigin: ICommXYZ | null, skinSphereOrigin: ICommXYZ | null, ribSphereOrigin: ICommXYZ | null, nippleSphereOrigin: ICommXYZ | null, aixs: "x" | "y" | "z") => void;
 }

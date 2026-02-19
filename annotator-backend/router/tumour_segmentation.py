@@ -77,6 +77,8 @@ async def get_cases_infos(auth: UserAuth, db: Session = Depends(get_db)):
                 # Config.OUTPUTS[4]: mask-obj
                 "mask_obj_path": case.output.mask_obj_path if case.output else None,
                 "mask_obj_size": case.output.mask_obj_size if case.output else None,
+                "mask_glb_path": case.output.mask_glb_path if case.output else None,
+                "mask_glb_size": case.output.mask_glb_size if case.output else None,
             }
         })
     return res
@@ -89,6 +91,11 @@ async def process_file(file_path: Path, headers: dict):
         file_object = tools.getReturnedJsonFormat(file_path)
         return StreamingResponse(file_object, media_type="application/json", headers=headers)
     elif file_path.suffix == '.obj':
+        return FileResponse(file_path, media_type="application/octet-stream", filename=file_path.name, headers=headers)
+    elif file_path.suffix == '.glb' or file_path.suffix == '.gltf':
+        return FileResponse(file_path, media_type="application/octet-stream", filename=file_path.name, headers=headers)
+    elif file_path.suffix == '.nii' or file_path.suffix == '.gz' or '.nii' in file_path.suffixes:
+        # Handle NIfTI files (.nii and .nii.gz)
         return FileResponse(file_path, media_type="application/octet-stream", filename=file_path.name, headers=headers)
     else:
         return None
@@ -109,30 +116,137 @@ async def send_single_file(path: str = Query(None)):
         return "No file exists!"
 
 
-@router.post("/api/mask/init")
-async def init_mask(mask: model.Masks, db: Session = Depends(get_db)):
-    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == mask.caseId).first()  # type: ignore
+@router.post("/api/mask/init-layers")
+async def init_mask(mask_layer: model.MaskInitRequest, db: Session = Depends(get_db)):
+    """
+    Initialize a single mask layer with metadata from frontend.
+    Called when frontend initializes each layer individually.
+
+    Steps:
+    1. Save metadata (dimensions, spacing, origin) to mask_meta_json_path
+    2. Create empty NIfTI file for the specified layer
+    3. Update database sizes
+    """
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == mask_layer.caseId).first()  # type: ignore
     if not case_output:
         raise HTTPException(status_code=404, detail="CaseOutput not found")
-    tools.save_mask_data(case_output, mask.masks)
 
+    print(f"Initializing {mask_layer.layerId} for case {mask_layer.caseId}")
+    print(f"Dimensions: {mask_layer.dimensions}")
+    print(f"Spacing: {mask_layer.voxelSpacing}")
+    print(f"Origin: {mask_layer.spaceOrigin}")
+
+    # Step 1: Save metadata to mask_meta_json_path
+    if case_output.mask_meta_json_path:
+        tools.save_mask_meta_json(
+            case_output,
+            dimensions=mask_layer.dimensions,
+            spacing=mask_layer.voxelSpacing if mask_layer.voxelSpacing else [1.0, 1.0, 1.0],
+            origin=mask_layer.spaceOrigin if mask_layer.spaceOrigin else [0.0, 0.0, 0.0]
+        )
+
+    # Step 2: Create empty NIfTI file for the specified layer
+    # Validate layerId
+    if mask_layer.layerId not in ["layer1", "layer2", "layer3"]:
+        raise HTTPException(status_code=400, detail="Invalid layerId. Must be layer1, layer2, or layer3")
+
+    # Get the NIfTI path for this layer from database
+    nii_path_attr = f"mask_{mask_layer.layerId}_nii_path"
+    nii_size_attr = f"mask_{mask_layer.layerId}_nii_size"
+
+    nii_path = getattr(case_output, nii_path_attr)
+
+    if not nii_path:
+        raise HTTPException(status_code=400, detail=f"{mask_layer.layerId} path not configured in database")
+
+    # Create the empty NIfTI file
+    file_size = tools.create_nifti_file(
+        file_path=nii_path,
+        dimensions=mask_layer.dimensions,
+        spacing=mask_layer.voxelSpacing if mask_layer.voxelSpacing else [1.0, 1.0, 1.0],
+        origin=mask_layer.spaceOrigin if mask_layer.spaceOrigin else [0.0, 0.0, 0.0]
+    )
+
+    # Update the size in database
+    setattr(case_output, nii_size_attr, file_size)
+
+    # Commit changes to database
     db.commit()
     db.refresh(case_output)
-    return True
+
+    return {
+        "success": True,
+        "dimensions": mask_layer.dimensions,
+        "layer_initialized": mask_layer.layerId,
+        "file_size": file_size
+    }
 
 
 @router.post("/api/mask/replace")
-async def replace_mask(mask: model.Mask, db: Session = Depends(get_db)):
-    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == mask.caseId).first()  # type: ignore
+async def replace_mask(mask_update: model.MaskSliceUpdate, db: Session = Depends(get_db)):
+    """
+    Update a specific slice in a mask layer's NIfTI file.
+
+    Receives a slice update from the frontend and writes it to the corresponding
+    layer's NIfTI file, then updates the database size.
+
+    Args:
+        mask_update: Contains caseId, layerId, sliceIndex, axis, sliceData, width, height
+        db: Database session
+
+    Returns:
+        Success status with updated file size
+    """
+    # Get the case output from database
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == mask_update.caseId).first()  # type: ignore
     if not case_output:
         raise HTTPException(status_code=404, detail="CaseOutput not found")
 
-    assert isinstance(case_output, CaseOutput)
-    tools.replace_data_to_json(case_output, mask)
+    # Validate layerId
+    if mask_update.layerId not in ["layer1", "layer2", "layer3"]:
+        raise HTTPException(status_code=400, detail="Invalid layerId. Must be layer1, layer2, or layer3")
 
-    db.commit()
-    db.refresh(case_output)
-    return True
+    # Get the NIfTI path for this layer from database
+    nii_path_attr = f"mask_{mask_update.layerId}_nii_path"
+    nii_size_attr = f"mask_{mask_update.layerId}_nii_size"
+
+    nii_path = getattr(case_output, nii_path_attr)
+
+    if not nii_path:
+        raise HTTPException(status_code=400, detail=f"{mask_update.layerId} path not configured in database")
+
+    nii_file = Path(nii_path)
+    if not nii_file.exists():
+        raise HTTPException(status_code=404, detail=f"{mask_update.layerId} NIfTI file not found: {nii_path}")
+
+    try:
+        # Update the slice in the NIfTI file
+        updated_size = tools.update_nifti_slice(
+            file_path=nii_path,
+            slice_data=mask_update.sliceData,
+            slice_index=mask_update.sliceIndex,
+            axis=mask_update.axis,
+            width=mask_update.width,
+            height=mask_update.height
+        )
+
+        # Update the size in database
+        setattr(case_output, nii_size_attr, updated_size)
+
+        # Commit changes to database
+        db.commit()
+        db.refresh(case_output)
+
+        return {
+            "success": True,
+            "layerId": mask_update.layerId,
+            "sliceIndex": mask_update.sliceIndex,
+            "axis": mask_update.axis,
+            "file_size": updated_size
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update mask slice: {str(e)}")
 
 
 @router.get("/api/clearmesh")
@@ -157,9 +271,113 @@ async def clear_mesh(case_id: str = Query(None), db: Session = Depends(get_db)):
 
 
 @router.get("/api/mask/save")
-async def save_mask(case_id: str, background_tasks: BackgroundTasks):
-    background_tasks.add_task(task_oi.json_converter, case_id)
-    return True
+async def save_mask(
+    case_id: str,
+    layer_id: str = Query("layer1", description="Layer to convert to OBJ (layer1/layer2/layer3)"),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Convert a NIfTI mask layer to OBJ 3D mesh format.
+
+    This endpoint triggers a background task that:
+    1. Reads the specified layer's NIfTI file
+    2. Generates a 3D mesh using marching cubes
+    3. Writes the mesh to OBJ format
+    4. Notifies the frontend via WebSocket when complete
+
+    Args:
+        case_id: ID of the case to process
+        layer_id: Layer to convert ('layer1', 'layer2', or 'layer3'), defaults to 'layer1'
+        background_tasks: FastAPI background tasks
+        db: Database session
+
+    Returns:
+        Success status with layer information
+    """
+    # Validate case exists
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == case_id).first()  # type: ignore
+    if not case_output:
+        raise HTTPException(status_code=404, detail="CaseOutput not found")
+
+    # Validate layer_id
+    if layer_id not in ["layer1", "layer2", "layer3"]:
+        raise HTTPException(status_code=400, detail="Invalid layer_id. Must be layer1, layer2, or layer3")
+
+    # Check if layer has data
+    nii_size_attr = f"mask_{layer_id}_nii_size"
+    nii_size = getattr(case_output, nii_size_attr)
+
+    if not nii_size or nii_size == 0:
+        raise HTTPException(status_code=400, detail=f"{layer_id} has no data to convert")
+
+    # Add background task to convert NIfTI to OBJ
+    background_tasks.add_task(task_oi.obj_converter, case_id, layer_id)
+
+    return {
+        "success": True,
+        "message": f"Started converting {layer_id} to OBJ for case {case_id}",
+        "layer_id": layer_id
+    }
+
+
+@router.get("/api/mask/save-gltf")
+async def save_mask_gltf(
+    case_id: str,
+    layer_id: str = Query("layer1", description="Layer to convert to GLTF (layer1/layer2/layer3)"),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Convert a NIfTI mask layer to GLTF 3D mesh format with channel-specific colors.
+
+    This endpoint triggers a background task that:
+    1. Reads the specified layer's NIfTI file
+    2. For each channel (1-8), generates a separate 3D mesh using marching cubes
+    3. Assigns distinct colors to each channel mesh
+    4. Exports all meshes to a single GLTF file with materials
+    5. Notifies the frontend via WebSocket when complete
+
+    Unlike OBJ export which merges all channels into a single mesh,
+    GLTF export preserves channel information with color-coded meshes.
+
+    Args:
+        case_id: ID of the case to process
+        layer_id: Layer to convert ('layer1', 'layer2', or 'layer3'), defaults to 'layer1'
+        background_tasks: FastAPI background tasks
+        db: Database session
+
+    Returns:
+        Success status with layer information
+
+    Example:
+        GET /api/mask/save-gltf?case_id=123&layer_id=layer1
+    """
+    # Validate case exists
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == case_id).first()  # type: ignore
+    if not case_output:
+        raise HTTPException(status_code=404, detail="CaseOutput not found")
+
+    # Validate layer_id
+    if layer_id not in ["layer1", "layer2", "layer3"]:
+        raise HTTPException(status_code=400, detail="Invalid layer_id. Must be layer1, layer2, or layer3")
+
+    # Check if layer has data
+    nii_size_attr = f"mask_{layer_id}_nii_size"
+    nii_size = getattr(case_output, nii_size_attr)
+
+    if not nii_size or nii_size == 0:
+        raise HTTPException(status_code=400, detail=f"{layer_id} has no data to convert")
+
+    # Add background task to convert NIfTI to GLTF
+    background_tasks.add_task(task_oi.gltf_converter, case_id, layer_id)
+
+    return {
+        "success": True,
+        "message": f"Started converting {layer_id} to GLTF with channel colors for case {case_id}",
+        "layer_id": layer_id,
+        "format": "gltf"
+    }
 
 
 @router.get("/api/breast_points")

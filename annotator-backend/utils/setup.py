@@ -22,7 +22,7 @@ class Config:
     SUBJECTS_METADATA_PATH = "subjects.xlsx"
     INPUTS = ["contrast-pre", "contrast-1", "contrast-2", "contrast-3", "contrast-4", "registration-pre",
               "registration-1", "registration-2", "registration-3", "registration-4"]
-    OUTPUTS = ["mask-meta-json", "mask-layer1-nii", "mask-layer2-nii", "mask-layer3-nii", "mask-obj"]
+    OUTPUTS = ["mask-meta-json", "mask-layer1-nii", "mask-layer2-nii", "mask-layer3-nii", "mask-obj", "mask-glb"]
 
 
 class TumourData:

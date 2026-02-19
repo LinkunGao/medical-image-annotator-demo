@@ -225,10 +225,22 @@ const emitterOnCaseDetails = async (caseDetails: ICaseDetails) => {
     (d: IDetails) => d.name === currentCasename.value
   );
   
-  // Get mask OBJ if exists
-  const objSize = currentCaseDetails.value?.output.mask_obj_size;
-  const maskUrl = currentCaseDetails.value?.output.mask_obj_path;
-  if (objSize && Number(objSize) > 0 && maskUrl) {
+  // // Get mask OBJ if exists
+  // const objSize = currentCaseDetails.value?.output.mask_obj_size;
+  // const maskUrl = currentCaseDetails.value?.output.mask_obj_path;
+  // if (objSize && Number(objSize) > 0 && maskUrl) {
+  //   const file = await useSingleFile(maskUrl);
+  //   if (file) {
+  //     maskTumourObj.value = URL.createObjectURL(file);
+  //   }
+  // }
+
+  // Get mask GLB if exists
+  const glbSize = currentCaseDetails.value?.output.mask_glb_size;
+  const maskUrl = currentCaseDetails.value?.output.mask_glb_path;
+  console.log("glbSize:",glbSize);
+  
+  if (glbSize && Number(glbSize) > 0 && maskUrl) {
     const file = await useSingleFile(maskUrl);
     if (file) {
       maskTumourObj.value = URL.createObjectURL(file);
@@ -302,6 +314,8 @@ async function loadNrrdCore(nrrdUrl: string, imageType: "origin" | "register") {
   
   // Load tumour if exists
   if (maskTumourObj.value) {
+    console.log(maskTumourObj.value);
+    
     models.loadSegmentTumour(maskTumourObj.value, (position) => {
       distanceCalc.tumourPosition.value = position;
       distanceCalc.displayAndCalculateNSR();

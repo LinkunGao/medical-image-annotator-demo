@@ -166,13 +166,14 @@ const loadMask = defineModel('loadMask', {
 
 const emit = defineEmits(
   [
-    "update:finishedCopperInit", 
-    "update:getMaskData", 
-    "update:sphereData", 
-    "update:calculateSpherePositionsData", 
-    "update:sliceNumber", 
-    "update:afterLoadAllCaseImages", 
-    "update:setMaskData", 
+    "update:finishedCopperInit",
+    "update:getMaskData",
+    "update:clearLayerVolume",
+    "update:sphereData",
+    "update:calculateSpherePositionsData",
+    "update:sliceNumber",
+    "update:afterLoadAllCaseImages",
+    "update:setMaskData",
     "update:mouseDragContrast"]);
 
 watch(() => currentCaseContrastUrls, (newVal, oldVal) => {
@@ -304,20 +305,27 @@ const getSliceNum = (index: number, contrastindex: number) => {
  emit("update:sliceNumber", { index, contrastindex });
 };
 const getMaskData = (
-  image: ImageData,
-  sliceId: number,
-  label: string,
+  sliceData: Uint8Array,
+  layerId: string,
+  channelId: number,
+  sliceIndex: number,
+  axis: "x" | "y" | "z",
   width: number,
   height: number,
-  clearAllFlag?: boolean) => {
+  clearFlag?: boolean) => {
   emit("update:getMaskData", {
-    image,
-    sliceId,
-    label,
+    sliceData,
+    layerId,
+    channelId,
+    sliceIndex,
+    axis,
     width,
     height,
-    clearAllFlag,
-  }); 
+    clearFlag,
+  });
+};
+const onClearLayerVolume = (layerId: string) => {
+  emit("update:clearLayerVolume", { layerId });
 };
 const getSphereData = (sphereOrigin: number[], sphereRadius: number) => {
   emit("update:sphereData", {
@@ -352,7 +360,7 @@ watch(filesCount, ()=>{
     if (firstLoad) {
 
       nrrdTools!.drag({ getSliceNum });
-      nrrdTools!.draw({ getMaskData, getSphereData, getCalculateSpherePositionsData});
+      nrrdTools!.draw({ getMaskData, onClearLayerVolume, getSphereData, getCalculateSpherePositionsData});
       nrrdTools!.setupGUI(gui as GUI);
       nrrdTools!.enableContrastDragEvents(getContrastMove)
 

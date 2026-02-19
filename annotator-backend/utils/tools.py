@@ -10,7 +10,7 @@ from models.db_model import User, Assay, Case, CaseInput, CaseOutput
 import os
 import torch
 import numpy as np
-import SimpleITK as sitk
+import nibabel as nib
 
 
 def get_metadata():
@@ -227,4 +227,209 @@ def init_tumour_position_json(path):
     }
     with open(path, 'w') as json_file:
         json.dump(tumour_position, json_file, indent=4)
+
+
+def save_mask_meta_json(case_output: CaseOutput, dimensions, spacing, origin):
+    """
+    Save mask metadata (dimensions, spacing, origin) to JSON file
+    and update the database size field.
+
+    :param case_output: CaseOutput database model instance
+    :param dimensions: List of [width, height, depth]
+    :param spacing: List of [sx, sy, sz] voxel spacing
+    :param origin: List of [ox, oy, oz] space origin
+    """
+    meta_json_path = Path(case_output.mask_meta_json_path)
+
+    # Create parent directory if it doesn't exist
+    meta_json_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Prepare metadata
+    metadata = {
+        "dimensions": dimensions,
+        "spacing": spacing,
+        "origin": origin
+    }
+
+    # Write to JSON file
+    with open(meta_json_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2)
+
+    # Update database size field
+    case_output.mask_meta_json_size = meta_json_path.stat().st_size
+
+
+def create_nifti_file(file_path, dimensions, spacing, origin):
+    """
+    Create an empty NIfTI file with specified dimensions, spacing, and origin.
+    Uses nibabel to ensure compatibility with nifti-reader-js.
+
+    :param file_path: Path object or string path to the .nii or .nii.gz file
+    :param dimensions: List of [width, height, depth]
+    :param spacing: List of [sx, sy, sz] voxel spacing in mm
+    :param origin: List of [ox, oy, oz] space origin in mm
+    :return: File size in bytes
+    """
+    file_path = Path(file_path)
+
+    # Create parent directory if it doesn't exist
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create empty volume (all zeros, Uint8)
+    width, height, depth = dimensions
+    empty_data = np.zeros((width, height, depth), dtype=np.uint8)
+
+    # Create affine matrix using nibabel's standard approach
+    # Build diagonal matrix from spacing and add origin as translation
+    affine = np.diag([spacing[0], spacing[1], spacing[2], 1.0])
+    affine[:3, 3] = origin
+
+    # Create NIfTI-1 image (most compatible format)
+    img = nib.Nifti1Image(empty_data, affine)
+
+    # Explicitly set data type to uint8
+    img.set_data_dtype(np.uint8)
+
+    # Save to file (nibabel handles .nii.gz compression automatically)
+    nib.save(img, str(file_path))
+
+    # Return file size
+    return file_path.stat().st_size
+
+
+def write_nifti_file(file_path, data, spacing, origin):
+    """
+    Write data to a NIfTI file with specified spacing and origin metadata.
+    Uses nibabel to ensure compatibility with nifti-reader-js.
+
+    :param file_path: Path object or string path to the .nii or .nii.gz file
+    :param data: numpy array of shape (width, height, depth)
+    :param spacing: List of [sx, sy, sz] voxel spacing in mm
+    :param origin: List of [ox, oy, oz] space origin in mm
+    :return: File size in bytes
+    """
+    file_path = Path(file_path)
+
+    # Create parent directory if it doesn't exist
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create affine matrix using nibabel's standard approach
+    affine = np.diag([spacing[0], spacing[1], spacing[2], 1.0])
+    affine[:3, 3] = origin
+
+    # Create NIfTI-1 image
+    img = nib.Nifti1Image(data.astype(np.uint8), affine)
+
+    # Explicitly set data type to uint8
+    img.set_data_dtype(np.uint8)
+
+    # Save to file
+    nib.save(img, str(file_path))
+
+    # Return file size
+    return file_path.stat().st_size
+
+
+def read_nifti_file(file_path):
+    """
+    Read a NIfTI file and return the data array and metadata.
+    Uses nibabel to ensure compatibility with nifti-reader-js.
+
+    :param file_path: Path object or string path to the .nii or .nii.gz file
+    :return: Dictionary with 'data', 'spacing', 'origin', 'dimensions'
+    """
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"NIfTI file not found: {file_path}")
+
+    # Read the image
+    img = nib.load(str(file_path))
+
+    # Get data array
+    data = img.get_fdata().astype(np.uint8)
+
+    # Get affine matrix
+    affine = img.affine
+
+    # Extract spacing from diagonal of affine matrix
+    spacing = [abs(affine[0, 0]), abs(affine[1, 1]), abs(affine[2, 2])]
+
+    # Extract origin from last column of affine matrix
+    origin = [affine[0, 3], affine[1, 3], affine[2, 3]]
+
+    # Get dimensions
+    dimensions = list(data.shape)
+
+    return {
+        "data": data,
+        "spacing": spacing,
+        "origin": origin,
+        "dimensions": dimensions
+    }
+
+
+def update_nifti_slice(file_path, slice_data, slice_index, axis, width, height):
+    """
+    Update a specific slice in a NIfTI file.
+
+    :param file_path: Path object or string path to the .nii or .nii.gz file
+    :param slice_data: List of uint8 values (flattened 2D array from frontend)
+    :param slice_index: Index of the slice to update
+    :param axis: 'x', 'y', 'z' or 'sagittal', 'coronal', 'axial'
+    :param width: Width of the slice
+    :param height: Height of the slice
+    :return: File size in bytes
+    """
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"NIfTI file not found: {file_path}")
+
+    # Read the existing NIfTI file
+    img = nib.load(str(file_path))
+    data = img.get_fdata().astype(np.uint8)
+    affine = img.affine
+
+    # Convert flattened slice_data to 2D array
+    slice_array = np.array(slice_data, dtype=np.uint8).reshape(height, width)
+
+    # Map axis name to dimension index
+    # Axis mapping: 'x'/'sagittal' = 0, 'y'/'coronal' = 1, 'z'/'axial' = 2
+    axis_map = {
+        'x': 0, 'sagittal': 0,
+        'y': 1, 'coronal': 1,
+        'z': 2, 'axial': 2
+    }
+
+    axis_index = axis_map.get(axis.lower())
+    if axis_index is None:
+        raise ValueError(f"Invalid axis: {axis}. Must be 'x', 'y', 'z', 'sagittal', 'coronal', or 'axial'")
+
+    # Validate slice_index
+    if slice_index < 0 or slice_index >= data.shape[axis_index]:
+        raise ValueError(f"Slice index {slice_index} out of range for axis {axis} (max: {data.shape[axis_index]-1})")
+
+    # Update the slice based on axis
+    # Note: slice_array is in (height, width) format from frontend
+    # Need to transpose to match NIfTI data orientation
+    if axis_index == 0:  # Sagittal (YZ plane)
+        # data[slice_index, :, :] shape should be (height, depth)
+        data[slice_index, :, :] = slice_array
+    elif axis_index == 1:  # Coronal (XZ plane)
+        # data[:, slice_index, :] shape should be (width, depth)
+        data[:, slice_index, :] = slice_array.T
+    else:  # axis_index == 2, Axial (XY plane)
+        # data[:, :, slice_index] shape should be (width, height)
+        data[:, :, slice_index] = slice_array.T
+
+    # Create new NIfTI image with updated data
+    new_img = nib.Nifti1Image(data, affine)
+    new_img.set_data_dtype(np.uint8)
+
+    # Save the updated file
+    nib.save(new_img, str(file_path))
+
+    # Return updated file size
+    return file_path.stat().st_size
 

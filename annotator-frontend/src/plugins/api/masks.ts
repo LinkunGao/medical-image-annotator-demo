@@ -29,12 +29,20 @@ export async function useReplaceMask(body: IReplaceMask) {
 }
 
 /**
- * Save mask
- * @returns
+ * Save mask - Convert NIfTI mask layer to OBJ 3D mesh
+ * @param case_id - The case ID
+ * @param layer_id - The layer to convert ('layer1', 'layer2', or 'layer3'), defaults to 'layer1'
+ * @returns Promise with success status
  */
-export async function useSaveMasks(case_id: string | number) {
-    const success = http.get<boolean>("/mask/save", { case_id });
-    return success;
+export async function useSaveMasks(
+    case_id: string | number,
+    layer_id: 'layer1' | 'layer2' | 'layer3' = 'layer1'
+) {
+    const result = http.get<{ success: boolean; message: string; layer_id: string }>(
+        "/mask/save-gltf",
+        { case_id, layer_id }
+    );
+    return result;
 }
 
 export async function useClearMaskMesh(case_id: string | number) {
@@ -42,44 +50,7 @@ export async function useClearMaskMesh(case_id: string | number) {
     return res;
 }
 
-// =============================================================================
-// Phase 0 - Data Persistence Strategy: New Mask APIs
-// =============================================================================
 
-/**
- * Load all 3 mask layers in a single request (msgpack format)
- * @param caseId - The case ID
- * @returns Promise with decoded mask data for all layers
- */
-export async function useGetAllMasks(caseId: string | number): Promise<IAllMasksResponse | null> {
-    try {
-        const response = await fetch(`/api/mask/all/${caseId}`, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/msgpack',
-            },
-        });
-
-        if (!response.ok) {
-            console.error(`Failed to load masks: ${response.status}`);
-            return null;
-        }
-
-        const arrayBuffer = await response.arrayBuffer();
-        const decoded = decode(new Uint8Array(arrayBuffer)) as IAllMasksResponse;
-
-        // Convert raw bytes to Uint8Array if present
-        return {
-            shape: decoded.shape,
-            layer1: decoded.layer1 ? new Uint8Array(decoded.layer1) : null,
-            layer2: decoded.layer2 ? new Uint8Array(decoded.layer2) : null,
-            layer3: decoded.layer3 ? new Uint8Array(decoded.layer3) : null,
-        };
-    } catch (error) {
-        console.error('Error loading all masks:', error);
-        return null;
-    }
-}
 
 /**
  * Get raw NIfTI data for a specific layer
@@ -138,12 +109,13 @@ export async function useApplyMaskDelta(
  */
 export async function useInitMaskLayers(
     request: IMaskInitLayersRequest
-): Promise<{ success: boolean; dimensions: number[]; layers_initialized: string[] } | null> {
+): Promise<{ success: boolean; dimensions: number[]; layer_initialized: string; file_size:number } | null> {
     try {
         const result = await http.post<{
             success: boolean;
             dimensions: number[];
-            layers_initialized: string[]
+            layer_initialized: string;
+            file_size: number;
         }>("/mask/init-layers", request);
         return result;
     } catch (error) {

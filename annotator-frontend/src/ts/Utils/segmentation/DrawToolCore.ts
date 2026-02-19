@@ -253,6 +253,9 @@ export class DrawToolCore extends CommToolsData {
   draw(opts?: IDrawOpts) {
     if (!!opts) {
       this.nrrd_states.getMask = opts?.getMaskData as any;
+      if (opts?.onClearLayerVolume) {
+        this.nrrd_states.onClearLayerVolume = opts.onClearLayerVolume as any;
+      }
       this.nrrd_states.getSphere = opts?.getSphereData as any;
       this.nrrd_states.getCalculateSpherePositions = opts?.getCalculateSpherePositionsData as any;
     }
@@ -1112,8 +1115,8 @@ export class DrawToolCore extends CommToolsData {
   /**
    * Clear mask on current slice canvas.
    *
-   * Phase 2 Day 8: Also clears the MaskVolume slice for all three layers
-   * before re-storing, ensuring volume and legacy storage stay in sync.
+   * Phase 2: Clears the MaskVolume slice for all three layers,
+   * re-stores, and notifies external via getMask callback with clearFlag=true.
    */
   clearPaint() {
     this.protectedData.Is_Draw = true;
@@ -1134,6 +1137,26 @@ export class DrawToolCore extends CommToolsData {
       layer1.clearSlice(idx, axis);
       layer2.clearSlice(idx, axis);
       layer3.clearSlice(idx, axis);
+
+      // Phase 2 Task 2.1: Notify external that slice was cleared
+      // Extract the cleared (all-zero) slice data and call getMask with clearFlag=true
+      if (!this.nrrd_states.loadMaskJson && !this.gui_states.sphere && !this.gui_states.calculator) {
+        const { data: sliceData, width, height } = layer1.getSliceUint8(idx, axis);
+        const activeChannel = this.gui_states.activeChannel || 1;
+        const layer = this.gui_states.layer;
+
+        // Call getMask to notify backend of the clear operation
+        this.nrrd_states.getMask(
+          sliceData,
+          layer,
+          activeChannel,
+          idx,
+          axis,
+          width,
+          height,
+          true  // clearFlag = true
+        );
+      }
     } catch {
       // Volume not ready (1×1×1 placeholder) — continue with legacy path
     }

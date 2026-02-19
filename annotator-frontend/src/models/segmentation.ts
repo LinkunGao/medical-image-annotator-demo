@@ -27,9 +27,13 @@ export interface IExportMasks {
 
 export interface IReplaceMask {
     caseId: string | number;
-    sliceId: number;
-    label: string;
-    mask: number[];
+    sliceIndex: number;
+    layerId: string;
+    channelId: number;
+    axis: "x" | "y" | "z";
+    sliceData: number[];
+    width: number;
+    height: number;
 }
 
 export interface ITumourPositionNNMask {
@@ -84,6 +88,7 @@ export interface IMaskDeltaRequest {
  */
 export interface IMaskInitLayersRequest {
     caseId: string | number;
+    layerId: string;
     dimensions: [number, number, number];  // [width, height, depth]
     voxelSpacing?: [number, number, number];
     spaceOrigin?: [number, number, number];

@@ -91,6 +91,9 @@ class CaseOutput(Base):
     # Config.OUTPUTS[4]: "mask-obj"
     mask_obj_path = Column(String, nullable=True)
     mask_obj_size = Column(Integer, nullable=True)
+
+    mask_glb_path = Column(String, nullable=True)
+    mask_glb_size = Column(Integer, nullable=True)
     
     temp_dataset_name = Column(String, nullable=True)
     sparc_sds_dataset_name = Column(String, nullable=True)

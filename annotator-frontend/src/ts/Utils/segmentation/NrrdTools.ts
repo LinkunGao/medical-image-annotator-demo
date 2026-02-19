@@ -239,6 +239,30 @@ export class NrrdTools extends DrawToolCore {
   }
 
   /**
+   * Check if a specific layer contains any non-zero mask data.
+   *
+   * This is useful for determining if a layer has actual annotations
+   * before saving or exporting to avoid processing empty layers.
+   *
+   * @param layerId - The layer to check ('layer1', 'layer2', or 'layer3')
+   * @returns True if the layer has any non-zero voxel data, false if empty
+   *
+   * @example
+   * ```ts
+   * if (nrrdTools.hasLayerData('layer1')) {
+   *   await useSaveMasks(caseId, 'layer1');
+   * }
+   * ```
+   */
+  hasLayerData(layerId: LayerId): boolean {
+    const volume = this.protectedData.maskData.volumes[layerId];
+    if (!volume) {
+      return false;
+    }
+    return volume.hasData();
+  }
+
+  /**
    * A initialise function for nrrd_tools
    */
   private init() {
@@ -387,6 +411,76 @@ export class NrrdTools extends DrawToolCore {
 
       this.nrrd_states.loadMaskJson = false;
       this.gui_states.resetZoom();
+      if (loadingBar) {
+        loadingBar.loadingContainer.style.display = "none";
+      }
+    }
+  }
+
+  /**
+   * Phase 4: Load mask data from NIfTI ArrayBuffer files
+   *
+   * @param layerMasks Array of NIfTI file data (1-3 items)
+   *   - 1 item: loads into layer1
+   *   - 2 items: loads into layer1 + layer2
+   *   - 3 items: loads into layer1 + layer2 + layer3
+   * @param loadingBar Optional loading bar UI
+   */
+  setMasksFromNIfTI(
+    layerMasks: ArrayBuffer[],
+    loadingBar?: loadingBarType
+  ) {
+    if (!layerMasks || layerMasks.length === 0) return;
+
+    if (loadingBar) {
+      loadingBar.loadingContainer.style.display = "flex";
+      loadingBar.progress.innerText = "Loading mask layers from NIfTI...";
+    }
+
+    try {
+      const layerIds: Array<"layer1" | "layer2" | "layer3"> = ["layer1", "layer2", "layer3"];
+
+      // Load each provided ArrayBuffer into the corresponding layer
+      for (let i = 0; i < layerMasks.length && i < 3; i++) {
+        const layerId = layerIds[i];
+        const niftiBuffer = layerMasks[i];
+
+        // Parse NIfTI header and extract data
+        // The ArrayBuffer should contain a full NIfTI file with header
+        const dataView = new DataView(niftiBuffer);
+
+        // NIfTI-1 header is 348 bytes, NIfTI-2 is 540 bytes
+        // For simplicity, assume NIfTI-1 format (most common)
+        // sizeof_hdr at offset 0 should be 348 for NIfTI-1
+        const sizeof_hdr = dataView.getInt32(0, true); // little-endian
+
+        let voxOffset: number;
+        if (sizeof_hdr === 348) {
+          // NIfTI-1: vox_offset at byte 108 (float32)
+          voxOffset = dataView.getFloat32(108, true);
+        } else if (sizeof_hdr === 540) {
+          // NIfTI-2: vox_offset at byte 168 (int64, but we read as float64)
+          voxOffset = dataView.getFloat64(168, true);
+        } else {
+          throw new Error(`Invalid NIfTI header: sizeof_hdr = ${sizeof_hdr}`);
+        }
+
+        // Extract raw voxel data (skip header + extension)
+        const dataStart = Math.floor(voxOffset);
+        const rawData = new Uint8Array(niftiBuffer, dataStart);
+
+        // Write directly into the MaskVolume
+        const volume = this.protectedData.maskData.volumes[layerId];
+        volume.setRawData(rawData);
+      }
+
+      // Reload the current slice from MaskVolume to canvas
+      this.reloadMasksFromVolume();
+      this.gui_states.resetZoom();
+
+    } catch (error) {
+      console.error("Error loading NIfTI masks:", error);
+    } finally {
       if (loadingBar) {
         loadingBar.loadingContainer.style.display = "none";
       }
@@ -827,9 +921,6 @@ export class NrrdTools extends DrawToolCore {
       this.protectedData.canvases.originCanvas =
         this.protectedData.mainPreSlices.canvas;
 
-      console.log("origin canvas w:", this.protectedData.canvases.originCanvas.width);
-
-
       this.updateOriginAndChangedWH();
     }
   }
@@ -894,14 +985,16 @@ export class NrrdTools extends DrawToolCore {
   }
 
   clearStoreImages() {
-    // Phase 3: Re-init MaskVolume with current dimensions
+    // Phase 3 Task 3.1: Only clear the active layer's MaskVolume
     if (this.nrrd_states.dimensions.length === 3) {
       const [w, h, d] = this.nrrd_states.dimensions;
-      this.protectedData.maskData.volumes = {
-        layer1: new MaskVolume(w, h, d, 1),
-        layer2: new MaskVolume(w, h, d, 1),
-        layer3: new MaskVolume(w, h, d, 1),
-      };
+      const activeLayer = this.gui_states.layer as "layer1" | "layer2" | "layer3";
+
+      // Re-init only the active layer's MaskVolume
+      this.protectedData.maskData.volumes[activeLayer] = new MaskVolume(w, h, d, 1);
+
+      // Phase 3 Task 3.2: Notify external that this layer's volume was cleared
+      this.nrrd_states.onClearLayerVolume(activeLayer);
     }
 
     // Invalidate reusable slice buffer

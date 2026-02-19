@@ -12,10 +12,19 @@ interface IInput {
 }
 
 interface IOutput {
-    mask_json_path: string;
-    mask_json_size: string | number;
+    mask_meta_json_path: string;
+    mask_meta_json_size: string | number;
     mask_obj_path: string;
     mask_obj_size: string | number;
+    mask_glb_path: string;
+    mask_glb_size: string | number;
+    // Phase 4/5: NIfTI mask layer paths and sizes
+    mask_layer1_nii_path?: string;
+    mask_layer1_nii_size?: string | number;
+    mask_layer2_nii_path?: string;
+    mask_layer2_nii_size?: string | number;
+    mask_layer3_nii_path?: string;
+    mask_layer3_nii_size?: string | number;
 }
 
 export interface IDetails {

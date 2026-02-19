@@ -186,6 +186,8 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                         filename += ".nii.gz"  # Common in medical imaging, but let's stick to simple .nii if specified or no ext
                     elif "obj" in output_type and not filename.endswith(".obj"):
                         filename += ".obj"
+                    elif "glb" in output_type and not filename.endswith(".glb"):
+                        filename += ".glb"
 
                     sam_folder = output_dir / cohort / f"sam-{idx + 1}"
                     sam_folder.mkdir(exist_ok=True, parents=True)
@@ -202,6 +204,8 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                         "path": str(file_path),
                         "size": file_size
                     }
+                    print("path", str(file_path))
+                    print("size", file_size)
 
                 # Update case_output with fields matching Config.OUTPUTS
                 case_output = CaseOutput(
@@ -219,6 +223,9 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                     # Config.OUTPUTS[4]: mask-obj
                     mask_obj_path=file_info.get("mask-obj", {}).get("path"),
                     mask_obj_size=file_info.get("mask-obj", {}).get("size"),
+
+                    mask_glb_path=file_info.get("mask-glb", {}).get("path"),
+                    mask_glb_size=file_info.get("mask-glb", {}).get("size"),
 
                     temp_dataset_name="medical-image-annotator-outputs",
                 )

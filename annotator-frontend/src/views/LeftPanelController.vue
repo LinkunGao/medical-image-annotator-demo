@@ -12,6 +12,7 @@
     :emitter="emitter"
     @update:finished-copper-init="onFinishedCopperInit"
     @update:get-mask-data="maskOps.getMaskData"
+    @update:clear-layer-volume="maskOps.onClearLayerVolume"
     @update:set-mask-data="maskOps.setMaskData"
     @update:sphere-data="distanceCalc.getSphereData"
     @update:calculate-sphere-positions-data="distanceCalc.getCalculateSpherePositionsData"

@@ -897,6 +897,35 @@ export class MaskVolume {
   }
 
   /**
+   * Check if the volume contains any non-zero voxel data.
+   *
+   * Returns true if at least one voxel has a non-zero value,
+   * false if all voxels are zero (empty mask).
+   *
+   * This is useful for determining if a layer has actual mask
+   * annotations before saving or exporting.
+   *
+   * @returns True if any voxel is non-zero, false if all zeros.
+   *
+   * @example
+   * ```ts
+   * const vol = new MaskVolume(512, 512, 100);
+   * vol.hasData(); // false (all zeros)
+   *
+   * vol.setVoxel(256, 256, 50, 255);
+   * vol.hasData(); // true
+   * ```
+   */
+  hasData(): boolean {
+    for (let i = 0; i < this.data.length; i++) {
+      if (this.data[i] !== 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Zero every voxel in a single slice along the given axis.
    *
    * If `channel` is provided, only that channel is cleared;
@@ -963,6 +992,69 @@ export class MaskVolume {
         idx += iStride;
       }
     }
+  }
+
+  // ── Slice extraction (raw Uint8Array) ────────────────────────────
+
+  /**
+   * Extract a 2D slice as a flat Uint8Array (one byte per voxel per channel).
+   *
+   * For a 1-channel volume the result is `sliceWidth × sliceHeight` bytes,
+   * each byte being the label value at that pixel.  This is suitable for
+   * sending to a backend that expects raw label data (e.g. NIfTI slice
+   * replacement).
+   *
+   * @param sliceIndex Index along the specified axis.
+   * @param axis       `'x'`, `'y'`, or `'z'` (default `'z'`).
+   * @returns A **copy** of the slice data plus its dimensions.
+   *
+   * @throws {RangeError} If sliceIndex is out of bounds.
+   *
+   * @example
+   * ```ts
+   * const { data, width, height } = vol.getSliceUint8(50, 'z');
+   * // data.length === width * height * channels
+   * ```
+   */
+  getSliceUint8(
+    sliceIndex: number,
+    axis: 'x' | 'y' | 'z' = 'z',
+  ): { data: Uint8Array; width: number; height: number } {
+    this.validateSliceIndex(sliceIndex, axis);
+
+    const [sliceW, sliceH] = this.getSliceDimensions(axis);
+    const nch = this.numChannels;
+    const sliceSize = sliceW * sliceH * nch;
+    const result = new Uint8Array(sliceSize);
+    const volData = this.data;
+    const rowStride = this.dims.width * nch;
+
+    if (axis === 'z') {
+      // Contiguous — bulk copy
+      const offset = sliceIndex * this.bytesPerSlice;
+      result.set(volData.subarray(offset, offset + sliceSize));
+    } else if (axis === 'y') {
+      let dst = 0;
+      for (let j = 0; j < sliceH; j++) {
+        const rowStart = j * this.dims.height * this.dims.width * nch + sliceIndex * rowStride;
+        result.set(volData.subarray(rowStart, rowStart + this.dims.width * nch), dst);
+        dst += this.dims.width * nch;
+      }
+    } else {
+      // X-axis (sagittal): sliceW = depth, sliceH = height
+      let dst = 0;
+      for (let j = 0; j < sliceH; j++) {
+        const yOffset = j * this.dims.width * nch;
+        for (let i = 0; i < sliceW; i++) {
+          const baseIdx = i * this.dims.height * this.dims.width * nch + yOffset + sliceIndex * nch;
+          for (let ch = 0; ch < nch; ch++) {
+            result[dst++] = volData[baseIdx + ch];
+          }
+        }
+      }
+    }
+
+    return { data: result, width: sliceW, height: sliceH };
   }
 
   // ── Private helpers ───────────────────────────────────────────────

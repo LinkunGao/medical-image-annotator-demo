@@ -14,12 +14,14 @@ export interface IToolSphereData {
 }
 
 export interface IToolMaskData {
-    image: ImageData;
-    sliceId: number;
-    label: string;
+    sliceData: Uint8Array;
+    layerId: string;
+    channelId: number;
+    sliceIndex: number;
+    axis: "x" | "y" | "z";
     width: number;
     height: number;
-    clearAllFlag?: boolean;
+    clearFlag?: boolean;
 }
 
 export interface IToolCalculateSpherePositionsData {

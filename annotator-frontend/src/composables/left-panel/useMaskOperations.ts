@@ -21,10 +21,11 @@ import {
     INrrdCaseNames,
     ICaseUrls,
 } from "@/models";
-import { useSingleFile, useReplaceMask, useClearMaskMesh, useInitMasks, useSaveMasks } from "@/plugins/api/index";
+import { useReplaceMask, useClearMaskMesh, useInitMasks, useSaveMasks, useInitMaskLayers } from "@/plugins/api/index";
 import { convertInitMaskData } from "@/plugins/worker";
 import { switchAnimationStatus } from "@/components/viewer/utils";
 import emitter from "@/plugins/custom-emitter";
+import { useNiftiReader } from "@/plugins/utils";
 
 /**
  * Interface for mask operations dependencies
@@ -59,134 +60,213 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
 
 
     /**
-     * Sends initial mask data to backend
+     * Phase 5: Sends initial empty mask layers to backend
+     *
+     * When a case has no existing mask data, initialize empty NIfTI files
+     * for all three layers with the correct dimensions and metadata.
      */
-    const sendInitMaskToBackend = async () => {
-        const rawMaskData = nrrdTools.value!.getMaskData();
-        const masksData = {
-            label1: {},
-            label2: {},
-            label3: {},
-        };
+    const sendInitMaskToBackend = async (layerId:string) => {
+        console.log("sendInitMaskToBackend");
+        
         const dimensions = nrrdTools.value!.getCurrentImageDimension();
-        const len = 0
-        const width = dimensions[0];
-        const height = dimensions[1];
         const voxelSpacing = nrrdTools.value!.getVoxelSpacing();
         const spaceOrigin = nrrdTools.value!.getSpaceOrigin();
 
-        if (len > 0) {
-            const result = convertInitMaskData({
-                masksData,
-                len,
-                width,
-                height,
-                voxelSpacing,
-                spaceOrigin,
-                msg: "init",
-            });
-            const body = {
-                caseId: currentCaseDetail.value!.id,
-                masks: result.masks as IStoredMasks,
-            };
-            await useInitMasks(body);
+        if (dimensions.length !== 3) {
+            console.warn("Cannot initialize masks: dimensions not available");
+            return;
+        }
+
+        const [width, height, depth] = dimensions;
+
+        // Phase 5 Task 5.1: Create empty NIfTI files on backend
+        const request = {
+            caseId: currentCaseDetail.value!.id,
+            layerId,
+            dimensions: [width, height, depth] as [number, number, number],
+            voxelSpacing: voxelSpacing as [number, number, number] | undefined,
+            spaceOrigin: spaceOrigin as [number, number, number] | undefined,
+        };
+
+        const result = await useInitMaskLayers(request);
+        
+        if (result && result.success) {
+            console.log(`Phase 5: Initialized ${result.layer_initialized} mask`);
+        } else {
+            console.error("Phase 5: Failed to initialize mask layers");
         }
     };
 
     /**
      * Loads mask JSON from URL
      */
-    const loadJsonMasks = (url: string) => {
-        switchAnimationStatus(loadingContainer.value!, progress.value!, "flex", "Loading masks data......");
+    // const loadJsonMasks = (url: string) => {
+    //     switchAnimationStatus(loadingContainer.value!, progress.value!, "flex", "Loading masks data......");
 
-        const xhr = new XMLHttpRequest();
-        xhr.open("GET", url, true);
-        xhr.responseType = "json";
-        xhr.onload = function () {
-            if (xhr.status === 200) {
-                const data = xhr.response;
-                if (data === null) {
-                    sendInitMaskToBackend();
-                }
-                nrrdTools.value!.setMasksData(data, loadBarMain.value);
-            }
-        };
-        xhr.send();
-    };
+    //     const xhr = new XMLHttpRequest();
+    //     xhr.open("GET", url, true);
+    //     xhr.responseType = "json";
+    //     xhr.onload = function () {
+    //         if (xhr.status === 200) {
+    //             const data = xhr.response;
+    //             if (data === null) {
+    //                 sendInitMaskToBackend();
+    //             }
+    //             nrrdTools.value!.setMasksData(data, loadBarMain.value);
+    //         }
+    //     };
+    //     xhr.send();
+    // };
 
     /**
-     * Sets mask data from backend
+     * Phase 4 & 5: Sets mask data from backend (NIfTI or legacy JSON)
+     *
+     * Priority order:
+     * 1. Try loading NIfTI files (mask_layer*_nii_path)
+     * 2. Fall back to legacy JSON if NIfTI not available
+     * 3. Initialize empty masks if nothing exists
      */
     const setMaskData = async () => {
         const caseDetail = allCasesDetails.value?.details.find(
             (detail) => detail.name === currentCaseName.value
         );
 
-        if (!!caseDetail) {
-            if (Number(caseDetail.output.mask_json_size) > 0) {
-                if (!!regiterUrls.jsonUrl) {
-                    URL.revokeObjectURL(regiterUrls.jsonUrl);
-                }
-                if (!!originUrls.jsonUrl) {
-                    URL.revokeObjectURL(originUrls.jsonUrl);
-                }
-                const file = await useSingleFile(caseDetail.output.mask_json_path);
+        if (!caseDetail) return;
 
-                if (!!file) {
-                    const url = URL.createObjectURL(file);
-                    regiterUrls.jsonUrl = url;
-                    originUrls.jsonUrl = url;
-                    loadJsonMasks(url);
-                }
-            } else {
-                sendInitMaskToBackend();
+        // Phase 4 Task 4.2: Try loading NIfTI files first
+        const hasLayer1 = Number(caseDetail.output.mask_layer1_nii_size || 0) > 0;
+        const hasLayer2 = Number(caseDetail.output.mask_layer2_nii_size || 0) > 0;
+        const hasLayer3 = Number(caseDetail.output.mask_layer3_nii_size || 0) > 0;
+
+        if (hasLayer1 || hasLayer2 || hasLayer3) {
+            // Load NIfTI masks using the new Phase 0 API
+            switchAnimationStatus(loadingContainer.value!, progress.value!, "flex", "Loading NIfTI mask layers...");
+
+            const layerBuffers: ArrayBuffer[] = [];
+
+            // Load layers in order (layer1, layer2, layer3)
+            if (hasLayer1) {
+                const buffer = await useNiftiReader(caseDetail.output.mask_layer1_nii_path!);
+                console.log(buffer);
+                
+                if (buffer) layerBuffers.push(buffer);
+            }else{
+                await sendInitMaskToBackend("layer1");
             }
+            if (hasLayer2) {
+                const buffer = await useNiftiReader(caseDetail.output.mask_layer2_nii_path!);
+                if (buffer) layerBuffers.push(buffer);
+            }else{
+                await sendInitMaskToBackend("layer2");
+            }
+            if (hasLayer3) {
+                const buffer = await useNiftiReader(caseDetail.output.mask_layer3_nii_path!);
+                if (buffer) layerBuffers.push(buffer);
+            }else{
+                await sendInitMaskToBackend("layer3");
+            }
+
+            if (layerBuffers.length > 0) {
+                nrrdTools.value!.setMasksFromNIfTI(layerBuffers, loadBarMain.value);
+            }
+
+            setTimeout(() => {
+                switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
+            }, 1000);
+
+        } else {
+            // Phase 5 Task 5.1: No data exists, initialize empty
+            await sendInitMaskToBackend("layer1");
+            await sendInitMaskToBackend("layer2");
+            await sendInitMaskToBackend("layer3");
+            setTimeout(() => {
+                switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
+            }, 1000);
         }
-        setTimeout(() => {
-            switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
-        }, 1000);
     };
 
     /**
-     * Handles mask data from tool events
+     * Handles mask data from tool events.
+     *
+     * Phase 1 Backend Sync: Now receives raw Uint8Array slice data from
+     * MaskVolume instead of ImageData.  Sends the slice data along with
+     * axis/index metadata so the backend can update the corresponding
+     * NIfTI slice directly.
      */
     const getMaskData = async (res: IToolMaskData) => {
-        const { image, sliceId, label, clearAllFlag } = res;
-        const copyImage = image.data.slice();
+        const { sliceData, layerId, channelId, sliceIndex, axis, width, height, clearFlag } = res;
 
-        const mask = [...copyImage];
-        const body: IReplaceMask = {
-            caseId: currentCaseDetail.value!.id,
-            sliceId,
-            label,
-            mask,
-        };
-
-        if (clearAllFlag) {
+        if (clearFlag) {
             await useClearMaskMesh(currentCaseDetail.value!.id);
-            sendInitMaskToBackend();
         } else {
+            const body: IReplaceMask = {
+                caseId: currentCaseDetail.value!.id,
+                sliceIndex,
+                layerId,
+                channelId,
+                axis,
+                sliceData: [...sliceData],
+                width,
+                height,
+            };
             await useReplaceMask(body);
         }
     };
 
     /**
-     * Saves masks and triggers model sync
+     * Handles layer volume clear notification
+     *
+     * Phase 3 Task 3.2: When clearStoreImages is called on a layer,
+     * notify the backend to clear that layer's NIfTI file.
      */
-    const onSaveMask = async (flag: boolean) => {
-        if (flag && nrrdTools.value!.protectedData.maskData.paintImages.z.length > 0) {
-            switchAnimationStatus(loadingContainer.value!, progress.value!, "flex", "Saving masks data, please wait......");
-            await useSaveMasks(currentCaseDetail.value!.id);
+    const onClearLayerVolume = async (event: { layerId: string }) => {
+        const { layerId } = event;
+        console.log(`Phase 3: Layer ${layerId} volume cleared, notifying backend...`);
+
+        // Clear the 3D mesh visualization
+        await useClearMaskMesh(currentCaseDetail.value!.id);
+
+        // TODO: Add backend API call to clear specific layer's NIfTI file
+        // For now, we clear the mesh. In the future, implement:
+        // await useClearLayerNIfTI(currentCaseDetail.value!.id, layerId);
+    };
+
+    /**
+     * Saves masks and triggers model sync
+     *
+     * Converts the specified layer's NIfTI file to OBJ 3D mesh format.
+     * The conversion runs as a background task on the backend.
+     *
+     * @param flag - Whether to proceed with save
+     * @param layerId - Layer to convert ('layer1', 'layer2', or 'layer3'), defaults to 'layer1'
+     */
+    const onSaveMask = async (flag: boolean, layerId: 'layer1' | 'layer2' | 'layer3' = 'layer1') => {
+        if (flag && nrrdTools.value!.hasLayerData(layerId)) {
+            switchAnimationStatus(
+                loadingContainer.value!,
+                progress.value!,
+                "flex",
+                `Converting ${layerId} to 3D mesh, please wait......`
+            );
+
+            const result = await useSaveMasks(currentCaseDetail.value!.id, layerId);
+
             switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
-            emitter.emit("Segmentation:SyncTumourModelButtonClicked", true);
+
+            if (result && result.success) {
+                console.log(`Successfully started conversion of ${layerId} to OBJ mesh`);
+                emitter.emit("Segmentation:SyncTumourModelButtonClicked", true);
+            } else {
+                console.error(`Failed to convert ${layerId} to OBJ mesh`);
+            }
         }
     };
 
-    return {
+    return { 
         sendInitMaskToBackend,
-        loadJsonMasks,
         setMaskData,
         getMaskData,
+        onClearLayerVolume,
         onSaveMask,
     };
 }

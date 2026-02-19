@@ -155,15 +155,28 @@ export class ImageStoreHelper extends BaseTool {
     }
 
     if (!nrrd.loadMaskJson && !this.ctx.gui_states.sphere && !this.ctx.gui_states.calculator) {
-      // Notify parent component (legacy callback)
-      this.ctx.nrrd_states.getMask(
-        imageData,
-        this.ctx.nrrd_states.currentIndex,
-        layer,
-        this.ctx.nrrd_states.nrrd_x_pixel,
-        this.ctx.nrrd_states.nrrd_y_pixel,
-        this.ctx.nrrd_states.clearAllFlag
-      );
+      // Extract raw slice data from MaskVolume and notify parent
+      try {
+        const volume = this.getVolumeForLayer(layer);
+        if (volume) {
+          const axis = this.ctx.protectedData.axis;
+          const sliceIndex = this.ctx.nrrd_states.currentIndex;
+          const { data: sliceData, width, height } = volume.getSliceUint8(sliceIndex, axis);
+          const activeChannel = this.ctx.gui_states.activeChannel || 1;
+          this.ctx.nrrd_states.getMask(
+            sliceData,
+            layer,
+            activeChannel,
+            sliceIndex,
+            axis,
+            width,
+            height,
+            this.ctx.nrrd_states.clearAllFlag
+          );
+        }
+      } catch {
+        // Volume not ready — skip notification
+      }
     }
   }
 

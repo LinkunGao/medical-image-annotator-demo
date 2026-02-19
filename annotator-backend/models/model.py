@@ -2,10 +2,18 @@ from pydantic import BaseModel
 from typing import Union, List, Optional
 from .api_models import UserAuth
 
-
+# need to remove
 class Masks(BaseModel):
     caseId: Union[int, str]
     masks: object
+
+class MaskInitRequest(BaseModel):
+    """Request model for initializing empty masks for a new case"""
+    caseId: Union[int, str]
+    layerId: str
+    dimensions: List[int]  # [width, height, depth]
+    voxelSpacing: Optional[List[float]] = None
+    spaceOrigin: Optional[List[float]] = None
 
 
 class Mask(BaseModel):
@@ -32,12 +40,17 @@ class MaskDeltaRequest(BaseModel):
     changes: List[MaskDeltaChange]
 
 
-class MaskInitRequest(BaseModel):
-    """Request model for initializing empty masks for a new case"""
+class MaskSliceUpdate(BaseModel):
+    """Request model for updating a complete slice in a mask layer"""
     caseId: Union[int, str]
-    dimensions: List[int]  # [width, height, depth]
-    voxelSpacing: Optional[List[float]] = None
-    spaceOrigin: Optional[List[float]] = None
+    layerId: str  # 'layer1', 'layer2', or 'layer3'
+    channelId: int  # channel/label ID (0-8, where 0 = transparent)
+    sliceIndex: int  # slice number
+    axis: str  # 'x', 'y', 'z' or 'sagittal', 'coronal', 'axial'
+    sliceData: List[int]  # flattened Uint8Array
+    width: int
+    height: int
+
 
 
 class Sphere(BaseModel):
