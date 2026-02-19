@@ -85,7 +85,7 @@ const rightPanelCoreRef = ref<InstanceType<typeof RightPanelCore>>();
 const openLoading = ref(false);
 const currentCasename = ref<string>("");
 const currentImageType = ref<"register" | "origin">("register");
-const maskTumourObj = ref<string>();
+const maskMeshUrl = ref<string>();
 const currentCaseDetails = ref<IDetails>();
 
 // Copper refs
@@ -117,13 +117,13 @@ const webSocket = useWebSocketSync({
   progress: ref(progress),
   copperScene,
   currentCaseDetails,
-  maskTumourObj,
+  maskMeshUrl,
   preTumourSphere: models.preTumourSphere,
-  segementTumour3DModel: models.segementTumour3DModel,
+  segmentMask3DModel: models.segmentMask3DModel,
   openLoading,
   tumourVolume: distanceCalc.tumourVolume,
-  loadSegmentTumour: (url: string) => {
-    models.loadSegmentTumour(url, (position) => {
+  loadSegmentMaskMesh: (url: string) => {
+    models.loadSegmentMaskMesh(url, (position) => {
       distanceCalc.tumourPosition.value = position;
       distanceCalc.displayAndCalculateNSR();
     });
@@ -232,7 +232,7 @@ const emitterOnCaseDetails = async (caseDetails: ICaseDetails) => {
   // if (objSize && Number(objSize) > 0 && maskUrl) {
   //   const file = await useSingleFile(maskUrl);
   //   if (file) {
-  //     maskTumourObj.value = URL.createObjectURL(file);
+  //     maskMeshUrl.value = URL.createObjectURL(file);
   //   }
   // }
 
@@ -244,7 +244,7 @@ const emitterOnCaseDetails = async (caseDetails: ICaseDetails) => {
   if (glbSize && Number(glbSize) > 0 && maskUrl) {
     const file = await useSingleFile(maskUrl);
     if (file) {
-      maskTumourObj.value = URL.createObjectURL(file);
+      maskMeshUrl.value = URL.createObjectURL(file);
     }
   }
   
@@ -314,10 +314,9 @@ async function loadNrrdCore(nrrdUrl: string, imageType: "origin" | "register") {
   rightPanelCoreRef.value?.resetNrrdImageView(nrrdData.nrrdMesh);
   
   // Load tumour if exists
-  if (maskTumourObj.value) {
-    console.log(maskTumourObj.value);
-    
-    models.loadSegmentTumour(maskTumourObj.value, (position) => {
+  if (maskMeshUrl.value) {
+
+    models.loadSegmentMaskMesh(maskMeshUrl.value, (position) => {
       distanceCalc.tumourPosition.value = position;
       distanceCalc.displayAndCalculateNSR();
     });

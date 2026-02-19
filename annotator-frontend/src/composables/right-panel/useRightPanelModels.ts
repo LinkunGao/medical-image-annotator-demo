@@ -33,7 +33,7 @@ export interface IModelsDeps {
  */
 export interface IUseRightPanelModelsReturn {
     allRightPanelMeshes: Ref<Array<THREE.Object3D>>;
-    segementTumour3DModel: Ref<THREE.Group | THREE.Mesh | undefined>;
+    segmentMask3DModel: Ref<THREE.Group | THREE.Mesh | undefined>;
     breast3DModel: Ref<THREE.Group | undefined>;
     preTumourSphere: Ref<THREE.Mesh | undefined>;
     tumourSliceIndex: Ref<ICommXYZ>;
@@ -45,7 +45,7 @@ export interface IUseRightPanelModelsReturn {
         recordSliceIndex?: ICommXYZ
     ) => void;
     resetSliceIndex: (sliceIndex: ICommXYZ) => void;
-    loadSegmentTumour: (
+    loadSegmentMaskMesh: (
         tomourUrl: string,
         onLoaded: (position: THREE.Vector3) => void
     ) => void;
@@ -77,7 +77,7 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
     /** All meshes added to right panel for cleanup */
     const allRightPanelMeshes = ref<Array<THREE.Object3D>>([]);
     /** Loaded segment tumour 3D model */
-    const segementTumour3DModel = ref<THREE.Group | THREE.Mesh | undefined>(undefined);
+    const segmentMask3DModel = ref<THREE.Group | THREE.Mesh | undefined>(undefined);
     /** Breast 3D model */
     const breast3DModel = ref<THREE.Group | undefined>(undefined);
     /** Preview tumour sphere */
@@ -145,21 +145,21 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
     /**
      * Loads segmented tumour from OBJ URL
      */
-    function loadSegmentTumour(
+    function loadSegmentMaskMesh(
         tomourUrl: string,
         onLoaded: (position: THREE.Vector3) => void
     ) {
         if (!copperScene.value) return;
 
         preTumourSphere.value = undefined;
-        if (segementTumour3DModel.value) {
-            copperScene.value.scene.remove(segementTumour3DModel.value);
-            segementTumour3DModel.value = undefined;
+        if (segmentMask3DModel.value) {
+            copperScene.value.scene.remove(segmentMask3DModel.value);
+            segmentMask3DModel.value = undefined;
         }
 
         // copperScene.value.loadOBJ(tomourUrl, (content) => {
         //     allRightPanelMeshes.value.push(content);
-        //     segementTumour3DModel.value = content;
+        //     segmentMask3DModel.value = content;
         //     content.position.set(nrrdBias.value.x, nrrdBias.value.y, nrrdBias.value.z);
         //     const tumourMesh = content.children[0] as THREE.Mesh;
         //     tumourMesh.renderOrder = 3;
@@ -178,7 +178,7 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
         // });
         copperScene.value.loadPureGLB(tomourUrl, (content) => {
             allRightPanelMeshes.value.push(content);
-            segementTumour3DModel.value = content;
+            segmentMask3DModel.value = content;
             content.position.set(nrrdBias.value.x, nrrdBias.value.y, nrrdBias.value.z);
             const tumourMesh = content.children[0] as THREE.Mesh;
             tumourMesh.renderOrder = 3;
@@ -236,8 +236,8 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
             copperScene.value.scene.remove(preTumourSphere.value);
             preTumourSphere.value = undefined;
         }
-        if (segementTumour3DModel.value) {
-            copperScene.value.scene.remove(segementTumour3DModel.value);
+        if (segmentMask3DModel.value) {
+            copperScene.value.scene.remove(segmentMask3DModel.value);
         }
 
         const geometry = new THREE.SphereGeometry(sphereData.sphereRadiusMM, 32, 16);
@@ -323,7 +323,7 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
 
     return {
         allRightPanelMeshes,
-        segementTumour3DModel,
+        segmentMask3DModel,
         breast3DModel,
         preTumourSphere,
         tumourSliceIndex,
@@ -331,7 +331,7 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
         nippleSphereR,
         updateNrrdMeshToCopperScene,
         resetSliceIndex,
-        loadSegmentTumour,
+        loadSegmentMaskMesh,
         loadBreastModel,
         drawPreviewSphere,
         removeOldMeshes,

@@ -104,7 +104,6 @@ async def process_file(file_path: Path, headers: dict):
 @router.get('/api/single-file')
 async def send_single_file(path: str = Query(None)):
     file_path = Path(path)
-    print(file_path)
     if file_path.exists():
         headers = {"x-file-name": file_path.name}
         response = await process_file(file_path, headers)

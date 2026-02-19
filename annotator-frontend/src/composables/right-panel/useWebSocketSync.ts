@@ -29,12 +29,12 @@ export interface IWebSocketDeps {
     progress: Ref<HTMLDivElement | undefined>;
     copperScene: Ref<Copper.copperScene | undefined>;
     currentCaseDetails: Ref<IDetails | undefined>;
-    maskTumourObj: Ref<string | undefined>;
+    maskMeshUrl: Ref<string | undefined>;
     preTumourSphere: Ref<THREE.Mesh | undefined>;
-    segementTumour3DModel: Ref<THREE.Group | THREE.Mesh | undefined>;
+    segmentMask3DModel: Ref<THREE.Group | THREE.Mesh | undefined>;
     openLoading: Ref<boolean>;
     tumourVolume: Ref<number>;
-    loadSegmentTumour: (url: string) => void;
+    loadSegmentMaskMesh: (url: string) => void;
     initPanelValue: () => void;
 }
 
@@ -47,12 +47,12 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
         progress,
         copperScene,
         currentCaseDetails,
-        maskTumourObj,
+        maskMeshUrl,
         preTumourSphere,
-        segementTumour3DModel,
+        segmentMask3DModel,
         openLoading,
         tumourVolume,
-        loadSegmentTumour,
+        loadSegmentMaskMesh,
         initPanelValue,
     } = deps;
 
@@ -95,11 +95,11 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
                     // Use cache busting parameter to get the latest file
                     const file = await useSingleFile(objUrl, true);
                     if (file) {
-                        if (maskTumourObj.value) {
-                            URL.revokeObjectURL(maskTumourObj.value);
+                        if (maskMeshUrl.value) {
+                            URL.revokeObjectURL(maskMeshUrl.value);
                         }
-                        maskTumourObj.value = URL.createObjectURL(file);
-                        loadSegmentTumour(maskTumourObj.value);
+                        maskMeshUrl.value = URL.createObjectURL(file);
+                        loadSegmentMaskMesh(maskMeshUrl.value);
                         toast.success("3D model loaded successfully");
                     }
                 }
@@ -112,8 +112,6 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
                 switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
                 openLoading.value = false;
             } else if (data.status === "complete" && data.action === "reload_gltf") {
-                console.log("Received GLTF reload notification:", data);
-
                 if (data.volume) {
                     tumourVolume.value = Math.ceil(data.volume) / 1000;
                 }
@@ -122,14 +120,12 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
                 if (glbUrl) {
                     // Use cache busting parameter to get the latest file
                     const file = await useSingleFile(glbUrl, true);
-                    console.log('GLB file loaded:', file);
-
                     if (file) {
-                        if (maskTumourObj.value) {
-                            URL.revokeObjectURL(maskTumourObj.value);
+                        if (maskMeshUrl.value) {
+                            URL.revokeObjectURL(maskMeshUrl.value);
                         }
-                        maskTumourObj.value = URL.createObjectURL(file);
-                        loadSegmentTumour(maskTumourObj.value);
+                        maskMeshUrl.value = URL.createObjectURL(file);
+                        loadSegmentMaskMesh(maskMeshUrl.value);
                         toast.success("3D model updated successfully");
                     }
                 }
@@ -142,7 +138,6 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
                 switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
                 openLoading.value = false;
             } else if (data.status === "error" && data.action === "gltf_conversion_error") {
-                console.error("GLTF conversion error:", data);
 
                 // Hide loading animation
                 if (loadingContainer.value && progress.value) {
@@ -151,9 +146,9 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
                 openLoading.value = false;
 
                 // Remove existing mesh from scene
-                if (segementTumour3DModel.value && copperScene.value) {
-                    copperScene.value.scene.remove(segementTumour3DModel.value);
-                    segementTumour3DModel.value = undefined;
+                if (segmentMask3DModel.value && copperScene.value) {
+                    copperScene.value.scene.remove(segmentMask3DModel.value);
+                    segmentMask3DModel.value = undefined;
                 }
 
                 // Reset tumour volume
@@ -164,10 +159,10 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
                 toast.warning(errorMsg);
             } else if (data.status === "delete" || event.data === "delete") {
                 tumourVolume.value = 0;
-                if (segementTumour3DModel.value && copperScene.value) {
-                    copperScene.value.scene.remove(segementTumour3DModel.value);
+                if (segmentMask3DModel.value && copperScene.value) {
+                    copperScene.value.scene.remove(segmentMask3DModel.value);
                 }
-                segementTumour3DModel.value = undefined;
+                segmentMask3DModel.value = undefined;
                 initPanelValue();
                 openLoading.value = false;
             }

@@ -91,32 +91,11 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
         const result = await useInitMaskLayers(request);
         
         if (result && result.success) {
-            console.log(`Phase 5: Initialized ${result.layer_initialized} mask`);
+            console.log(`Initialized ${result.layer_initialized} mask`);
         } else {
-            console.error("Phase 5: Failed to initialize mask layers");
+            console.error("Failed to initialize mask layers");
         }
     };
-
-    /**
-     * Loads mask JSON from URL
-     */
-    // const loadJsonMasks = (url: string) => {
-    //     switchAnimationStatus(loadingContainer.value!, progress.value!, "flex", "Loading masks data......");
-
-    //     const xhr = new XMLHttpRequest();
-    //     xhr.open("GET", url, true);
-    //     xhr.responseType = "json";
-    //     xhr.onload = function () {
-    //         if (xhr.status === 200) {
-    //             const data = xhr.response;
-    //             if (data === null) {
-    //                 sendInitMaskToBackend();
-    //             }
-    //             nrrdTools.value!.setMasksData(data, loadBarMain.value);
-    //         }
-    //     };
-    //     xhr.send();
-    // };
 
     /**
      * Phase 4 & 5: Sets mask data from backend (NIfTI or legacy JSON)
@@ -147,8 +126,6 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
             // Load layers in order (layer1, layer2, layer3)
             if (hasLayer1) {
                 const buffer = await useNiftiReader(caseDetail.output.mask_layer1_nii_path!);
-                console.log(buffer);
-                
                 if (buffer) layerBuffers.push(buffer);
             }else{
                 await sendInitMaskToBackend("layer1");
@@ -224,11 +201,7 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
         console.log(`Phase 3: Layer ${layerId} volume cleared, notifying backend...`);
 
         // Clear the 3D mesh visualization
-        await useClearMaskMesh(currentCaseDetail.value!.id);
-
-        // TODO: Add backend API call to clear specific layer's NIfTI file
-        // For now, we clear the mesh. In the future, implement:
-        // await useClearLayerNIfTI(currentCaseDetail.value!.id, layerId);
+        await sendInitMaskToBackend(layerId);
     };
 
     /**
