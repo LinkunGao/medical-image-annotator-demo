@@ -572,17 +572,15 @@ export class NrrdTools extends DrawToolCore {
    *
    * Expects pre-extracted voxel bytes (e.g. from useNiftiVoxelData).
    *
-   * @param layerVoxels Array of raw voxel Uint8Array (1-3 items)
-   *   - 1 item: loads into layer1
-   *   - 2 items: loads into layer1 + layer2
-   *   - 3 items: loads into layer1 + layer2 + layer3
+   * @param layerVoxels Map of layer ID to raw voxel Uint8Array
+   *   Keys should be 'layer1', 'layer2', 'layer3'
    * @param loadingBar Optional loading bar UI
    */
   setMasksFromNIfTI(
-    layerVoxels: Uint8Array[],
+    layerVoxels: Map<string, Uint8Array>,
     loadingBar?: loadingBarType
   ) {
-    if (!layerVoxels || layerVoxels.length === 0) return;
+    if (!layerVoxels || layerVoxels.size === 0) return;
 
     if (loadingBar) {
       loadingBar.loadingContainer.style.display = "flex";
@@ -590,12 +588,12 @@ export class NrrdTools extends DrawToolCore {
     }
 
     try {
-      const layerIds: Array<"layer1" | "layer2" | "layer3"> = ["layer1", "layer2", "layer3"];
-
-      for (let i = 0; i < layerVoxels.length && i < 3; i++) {
-        const layerId = layerIds[i];
-        const rawData = layerVoxels[i];
-        const volume = this.protectedData.maskData.volumes[layerId];
+      for (const [layerId, rawData] of layerVoxels) {
+        const volume = this.protectedData.maskData.volumes[layerId as keyof typeof this.protectedData.maskData.volumes];
+        if (!volume) {
+          console.warn(`setMasksFromNIfTI: unknown layer "${layerId}", skipping`);
+          continue;
+        }
         const expectedLen = volume.getRawData().length;
 
         // Ensure we copy exactly the right number of bytes

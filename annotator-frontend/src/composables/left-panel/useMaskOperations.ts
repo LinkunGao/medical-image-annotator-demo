@@ -121,29 +121,29 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
             // Load NIfTI masks using the new Phase 0 API
             switchAnimationStatus(loadingContainer.value!, progress.value!, "flex", "Loading NIfTI mask layers...");
 
-            const layerBuffers: Uint8Array[] = [];
+            const layerBuffers: Map<string, Uint8Array> = new Map();
 
             // Load layers in order (layer1, layer2, layer3)
             if (hasLayer1) {
                 const voxels = await useNiftiVoxelData(caseDetail.output.mask_layer1_nii_path!);
-                if (voxels) layerBuffers.push(voxels);
+                if (voxels) layerBuffers.set('layer1', voxels);
             } else {
                 await sendInitMaskToBackend("layer1");
             }
             if (hasLayer2) {
                 const voxels = await useNiftiVoxelData(caseDetail.output.mask_layer2_nii_path!);
-                if (voxels) layerBuffers.push(voxels);
+                if (voxels) layerBuffers.set('layer2', voxels);
             } else {
                 await sendInitMaskToBackend("layer2");
             }
             if (hasLayer3) {
                 const voxels = await useNiftiVoxelData(caseDetail.output.mask_layer3_nii_path!);
-                if (voxels) layerBuffers.push(voxels);
+                if (voxels) layerBuffers.set('layer3', voxels);
             } else {
                 await sendInitMaskToBackend("layer3");
             }
 
-            if (layerBuffers.length > 0) {
+            if (layerBuffers.size > 0) {
                 nrrdTools.value!.setMasksFromNIfTI(layerBuffers, loadBarMain.value);
             }
 
