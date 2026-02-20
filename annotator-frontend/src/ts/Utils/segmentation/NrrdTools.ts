@@ -568,19 +568,21 @@ export class NrrdTools extends DrawToolCore {
   }
 
   /**
-   * Phase 4: Load mask data from NIfTI ArrayBuffer files
+   * Load raw voxel data into MaskVolume layers.
    *
-   * @param layerMasks Array of NIfTI file data (1-3 items)
+   * Expects pre-extracted voxel bytes (e.g. from useNiftiVoxelData).
+   *
+   * @param layerVoxels Array of raw voxel Uint8Array (1-3 items)
    *   - 1 item: loads into layer1
    *   - 2 items: loads into layer1 + layer2
    *   - 3 items: loads into layer1 + layer2 + layer3
    * @param loadingBar Optional loading bar UI
    */
   setMasksFromNIfTI(
-    layerMasks: ArrayBuffer[],
+    layerVoxels: Uint8Array[],
     loadingBar?: loadingBarType
   ) {
-    if (!layerMasks || layerMasks.length === 0) return;
+    if (!layerVoxels || layerVoxels.length === 0) return;
 
     if (loadingBar) {
       loadingBar.loadingContainer.style.display = "flex";
@@ -590,38 +592,20 @@ export class NrrdTools extends DrawToolCore {
     try {
       const layerIds: Array<"layer1" | "layer2" | "layer3"> = ["layer1", "layer2", "layer3"];
 
-      // Load each provided ArrayBuffer into the corresponding layer
-      for (let i = 0; i < layerMasks.length && i < 3; i++) {
+      for (let i = 0; i < layerVoxels.length && i < 3; i++) {
         const layerId = layerIds[i];
-        const niftiBuffer = layerMasks[i];
-
-        // Parse NIfTI header and extract data
-        // The ArrayBuffer should contain a full NIfTI file with header
-        const dataView = new DataView(niftiBuffer);
-
-        // NIfTI-1 header is 348 bytes, NIfTI-2 is 540 bytes
-        // For simplicity, assume NIfTI-1 format (most common)
-        // sizeof_hdr at offset 0 should be 348 for NIfTI-1
-        const sizeof_hdr = dataView.getInt32(0, true); // little-endian
-
-        let voxOffset: number;
-        if (sizeof_hdr === 348) {
-          // NIfTI-1: vox_offset at byte 108 (float32)
-          voxOffset = dataView.getFloat32(108, true);
-        } else if (sizeof_hdr === 540) {
-          // NIfTI-2: vox_offset at byte 168 (int64, but we read as float64)
-          voxOffset = dataView.getFloat64(168, true);
-        } else {
-          throw new Error(`Invalid NIfTI header: sizeof_hdr = ${sizeof_hdr}`);
-        }
-
-        // Extract raw voxel data (skip header + extension)
-        const dataStart = Math.floor(voxOffset);
-        const rawData = new Uint8Array(niftiBuffer, dataStart);
-
-        // Write directly into the MaskVolume
+        const rawData = layerVoxels[i];
         const volume = this.protectedData.maskData.volumes[layerId];
-        volume.setRawData(rawData);
+        const expectedLen = volume.getRawData().length;
+
+        // Ensure we copy exactly the right number of bytes
+        if (rawData.length >= expectedLen) {
+          volume.setRawData(rawData.slice(0, expectedLen));
+        } else {
+          const padded = new Uint8Array(expectedLen);
+          padded.set(rawData);
+          volume.setRawData(padded);
+        }
       }
 
       // Reload the current slice from MaskVolume to canvas

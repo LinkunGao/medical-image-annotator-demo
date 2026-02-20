@@ -102,6 +102,34 @@ export async function useNiftiImageData(niiPath: string): Promise<ArrayBuffer | 
 }
 
 /**
+ * Read NIfTI file and return only the raw voxel data as Uint8Array.
+ *
+ * Handles fetching, decompression, header parsing, and voxel extraction
+ * so that callers receive a flat byte array ready to copy into a MaskVolume.
+ *
+ * @param niiPath - Path to the .nii or .nii.gz file on backend
+ * @returns Promise<Uint8Array | null> - Raw voxel bytes, or null if failed
+ */
+export async function useNiftiVoxelData(niiPath: string): Promise<Uint8Array | null> {
+  const buffer = await useNiftiReader(niiPath);
+  if (!buffer) return null;
+
+  const header = nifti.readHeader(buffer);
+  if (!header) {
+    console.error(`Failed to read NIfTI header: ${niiPath}`);
+    return null;
+  }
+
+  const imageData = nifti.readImage(header, buffer);
+  if (!imageData) {
+    console.error(`Failed to read NIfTI image data: ${niiPath}`);
+    return null;
+  }
+
+  return new Uint8Array(imageData);
+}
+
+/**
  * Convert Blob to ArrayBuffer
  *
  * @param blob - Blob to convert

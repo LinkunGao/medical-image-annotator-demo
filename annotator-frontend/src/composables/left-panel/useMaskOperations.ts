@@ -25,7 +25,7 @@ import { useReplaceMask, useClearMaskMesh, useInitMasks, useSaveMasks, useInitMa
 import { convertInitMaskData } from "@/plugins/worker";
 import { switchAnimationStatus } from "@/components/viewer/utils";
 import emitter from "@/plugins/custom-emitter";
-import { useNiftiReader } from "@/plugins/utils";
+import { useNiftiVoxelData } from "@/plugins/utils";
 
 /**
  * Interface for mask operations dependencies
@@ -65,9 +65,9 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
      * When a case has no existing mask data, initialize empty NIfTI files
      * for all three layers with the correct dimensions and metadata.
      */
-    const sendInitMaskToBackend = async (layerId:string) => {
+    const sendInitMaskToBackend = async (layerId: string) => {
         console.log("sendInitMaskToBackend");
-        
+
         const dimensions = nrrdTools.value!.getCurrentImageDimension();
         const voxelSpacing = nrrdTools.value!.getVoxelSpacing();
         const spaceOrigin = nrrdTools.value!.getSpaceOrigin();
@@ -89,7 +89,7 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
         };
 
         const result = await useInitMaskLayers(request);
-        
+
         if (result && result.success) {
             console.log(`Initialized ${result.layer_initialized} mask`);
         } else {
@@ -121,25 +121,25 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
             // Load NIfTI masks using the new Phase 0 API
             switchAnimationStatus(loadingContainer.value!, progress.value!, "flex", "Loading NIfTI mask layers...");
 
-            const layerBuffers: ArrayBuffer[] = [];
+            const layerBuffers: Uint8Array[] = [];
 
             // Load layers in order (layer1, layer2, layer3)
             if (hasLayer1) {
-                const buffer = await useNiftiReader(caseDetail.output.mask_layer1_nii_path!);
-                if (buffer) layerBuffers.push(buffer);
-            }else{
+                const voxels = await useNiftiVoxelData(caseDetail.output.mask_layer1_nii_path!);
+                if (voxels) layerBuffers.push(voxels);
+            } else {
                 await sendInitMaskToBackend("layer1");
             }
             if (hasLayer2) {
-                const buffer = await useNiftiReader(caseDetail.output.mask_layer2_nii_path!);
-                if (buffer) layerBuffers.push(buffer);
-            }else{
+                const voxels = await useNiftiVoxelData(caseDetail.output.mask_layer2_nii_path!);
+                if (voxels) layerBuffers.push(voxels);
+            } else {
                 await sendInitMaskToBackend("layer2");
             }
             if (hasLayer3) {
-                const buffer = await useNiftiReader(caseDetail.output.mask_layer3_nii_path!);
-                if (buffer) layerBuffers.push(buffer);
-            }else{
+                const voxels = await useNiftiVoxelData(caseDetail.output.mask_layer3_nii_path!);
+                if (voxels) layerBuffers.push(voxels);
+            } else {
                 await sendInitMaskToBackend("layer3");
             }
 
@@ -237,7 +237,7 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
         }
     };
 
-    return { 
+    return {
         sendInitMaskToBackend,
         setMaskData,
         getMaskData,
