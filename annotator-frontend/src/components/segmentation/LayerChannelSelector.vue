@@ -22,7 +22,8 @@
           class="layer-item"
           :class="{
             'active': activeLayer === layer.id,
-            'is-hidden': !layerVisibility[layer.id]
+            'is-hidden': !layerVisibility[layer.id],
+            'is-disabled': isLayerDisabled(layer.id)
           }"
         >
           <!-- Visibility Toggle (Left) -->
@@ -62,7 +63,7 @@
           :class="{
             'active': activeChannel === channel.value,
             'is-disabled': isChannelDisabled(channel.value),
-            'parent-hidden': !layerVisibility[activeLayer]
+            'parent-hidden': !layerVisibility[activeLayer] || isLayerDisabled(activeLayer)
           }"
           :style="getChannelStyle(channel)"
           @click="onSelectChannel(channel.value)"
@@ -76,7 +77,7 @@
             v-if="layerVisibility[activeLayer]"
             class="channel-vis-toggle"
             @click.stop="onToggleChannelVisibility(channel.value)"
-            :class="{ 'vis-active': channelVisibility[activeLayer]?.[channel.value] }"
+            :class="{ 'vis-active': channelVisibility[activeLayer]?.[channel.value], 'is-disabled': isLayerDisabled(activeLayer) || channelDisabled[activeLayer]?.[channel.value] }"
           >
             <v-icon size="12" :color="getVisIconColor(channel.value)">
               {{ channelVisibility[activeLayer]?.[channel.value] ? 'mdi-eye' : 'mdi-eye-off' }}
@@ -116,6 +117,8 @@ const {
   activeChannel,
   layerVisibility,
   channelVisibility,
+  layerDisabled,
+  channelDisabled,
   controlsEnabled,
   dynamicChannelConfigs,
   setActiveLayer,
@@ -130,8 +133,17 @@ const {
 
 // ===== Logic =====
 
+// Helper to check if a layer is disabled
+const isLayerDisabled = (layerId: Copper.LayerId) => {
+  return layerDisabled.value[layerId] || LAYER_CONFIGS.find(l => l.id === layerId)?.disable;
+};
+
 // Helper to check if a channel is disabled
 const isChannelDisabled = (val: number) => {
+  // If parent layer is disabled, everything is disabled
+  if (isLayerDisabled(activeLayer.value)) return true;
+  // If channel is explicitly disabled
+  if (channelDisabled.value[activeLayer.value]?.[val]) return true;
   // If parent layer is hidden, everything is disabled
   if (!layerVisibility.value[activeLayer.value]) return true;
   // If channel itself is hidden, it's disabled for selection
@@ -149,13 +161,13 @@ const activeBadgeStyle = computed(() => {
   };
 });
 
-// Dynamic style for channel card
 const getChannelStyle = (channel: ChannelConfig) => {
   const isActive = activeChannel.value === channel.value;
   const isHidden = !channelVisibility.value[activeLayer.value]?.[channel.value];
   const isLayerHidden = !layerVisibility.value[activeLayer.value];
+  const isParentDisabled = isLayerDisabled(activeLayer.value);
 
-  if (isLayerHidden) return {};
+  if (isLayerHidden || isParentDisabled) return {};
 
   const baseColor = channel.color.replace(',0.6)', ',1)');
 
@@ -184,6 +196,7 @@ const getVisIconColor = (val: number) => {
 // ===== Event Handlers =====
 
 function onSelectLayer(layerId: Copper.LayerId): void {
+  if (isLayerDisabled(layerId)) return;
   if (!layerVisibility.value[layerId]) {
     return;
   }
@@ -198,10 +211,13 @@ function onSelectChannel(channel: Copper.ChannelValue): void {
 }
 
 function onToggleLayerVisibility(layerId: Copper.LayerId): void {
+  if (isLayerDisabled(layerId)) return;
   toggleLayerVisibility(layerId);
 }
 
 function onToggleChannelVisibility(channel: Copper.ChannelValue): void {
+  if (isLayerDisabled(activeLayer.value)) return;
+  if (channelDisabled.value[activeLayer.value]?.[channel]) return;
   toggleChannelVisibility(activeLayer.value, channel);
 }
 
@@ -316,6 +332,22 @@ onUnmounted(() => {
 .layer-item.is-hidden {
     opacity: 0.6;
     border-style: dashed;
+}
+
+.layer-item.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    filter: grayscale(1);
+    border-style: dashed;
+}
+
+.layer-item.is-disabled .layer-vis-btn {
+    pointer-events: none;
+}
+
+.layer-item.is-disabled .layer-select-area {
+    pointer-events: none;
+    color: rgba(var(--v-theme-on-surface), 0.4);
 }
 
 /* Visibility Toggle (Left Part) */
@@ -451,5 +483,10 @@ onUnmounted(() => {
   background: rgba(var(--v-theme-on-surface), 0.4);
   opacity: 1;
   transform: scale(1.1);
+}
+
+.channel-vis-toggle.is-disabled {
+  pointer-events: none;
+  opacity: 0.2;
 }
 </style>

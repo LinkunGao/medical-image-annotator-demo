@@ -161,7 +161,9 @@ Template 绑定: [L78](annotator-frontend/src/components/segmentation/LayerChann
 | `activeChannel` | `Ref<ChannelValue>` | `1` | [L65](annotator-frontend/src/composables/left-panel/useLayerChannel.ts#L65) |
 | `layerVisibility` | `Ref<Record<LayerId, boolean>>` | 全部 `true` | [L68-72](annotator-frontend/src/composables/left-panel/useLayerChannel.ts#L68-L72) |
 | `channelVisibility` | `Ref<Record<LayerId, Record<number, boolean>>>` | 全部 `true` | [L75-79](annotator-frontend/src/composables/left-panel/useLayerChannel.ts#L75-L79) |
-| `controlsEnabled` | `Ref<boolean>` | `false` | [L82](annotator-frontend/src/composables/left-panel/useLayerChannel.ts#L82) |
+| `layerDisabled` | `Ref<Record<LayerId, boolean>>` | 基于配置或 `false` | |
+| `channelDisabled` | `Ref<Record<LayerId, Record<number, boolean>>>` | 基于配置或 `false` | |
+| `controlsEnabled` | `Ref<boolean>` | `false` | |
 
 ### 4.2 Computed 属性
 
@@ -215,7 +217,7 @@ NrrdTools 内部 ([NrrdTools.ts:207-210](annotator-frontend/src/ts/Utils/segment
 - 设置 `gui_states.layerVisibility[layerId] = visible`
 - 调用 `reloadMasksFromVolume()` → 重新渲染所有 Layer
 
-#### `toggleChannelVisibility(layerId, channel)` — [L127-131](annotator-frontend/src/composables/left-panel/useLayerChannel.ts#L127-L131)
+#### `toggleChannelVisibility(layerId, channel)`
 
 ```ts
 function toggleChannelVisibility(layerId: Copper.LayerId, channel: Copper.ChannelValue): void {
@@ -229,6 +231,10 @@ NrrdTools 内部 ([NrrdTools.ts:222-227](annotator-frontend/src/ts/Utils/segment
 - 设置 `gui_states.channelVisibility[layerId][channel] = visible`
 - 调用 `reloadMasksFromVolume()` → 重新渲染所有 Layer
 
+#### `setLayerDisabled(layerId, disabled)` / `setChannelDisabled(layerId, channel, disabled)`
+
+更新对应的 `layerDisabled` 和 `channelDisabled` Vue 响应式变量，支持在运行时配置禁用状态。UI 组件（`LayerChannelSelector.vue`）会获取这两个新状态同步挂载 `is-disabled` 类以拦截交互逻辑及显示禁用样式（灰显、指针不可更改）。
+
 #### `syncFromManager()` — [L150-169](annotator-frontend/src/composables/left-panel/useLayerChannel.ts#L150-L169)
 
 从 NrrdTools 读取当前状态同步到 Vue 响应式变量:
@@ -241,11 +247,13 @@ NrrdTools 内部 ([NrrdTools.ts:222-227](annotator-frontend/src/ts/Utils/segment
 
 #### LAYER_CONFIGS — [L35-39](annotator-frontend/src/composables/left-panel/useLayerChannel.ts#L35-L39)
 
-| Layer ID | 名称 | UI 颜色 |
-|----------|------|---------|
-| `layer1` | Layer 1 | `#4CAF50` (Green) |
-| `layer2` | Layer 2 | `#2196F3` (Blue) |
-| `layer3` | Layer 3 | `#FF9800` (Orange) |
+| Layer ID | 名称 | UI 颜色 | 等级禁用 | 配置扩展 |
+|----------|------|---------|----------|----------|
+| `layer1` | Layer 1 | `#4CAF50` (Green) | - | - |
+| `layer2` | Layer 2 | `#2196F3` (Blue) | - | `disabledChannels: [2, 3, 4, 5, 6, 7, 8]` |
+| `layer3` | Layer 3 | `#FF9800` (Orange) | `disable: true` | - |
+
+在 `LayerConfig` 接口中，支持 `disable?: boolean` 直接在初始化时禁用整个图层。也支持 `disabledChannels?: number[]` 根据通道 ID 进行声明，初始化指定图层的部分子通道处于禁用状态。
 
 #### CHANNEL_CONFIGS（静态默认，作为 fallback）
 

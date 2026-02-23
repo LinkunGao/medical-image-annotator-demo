@@ -19,6 +19,8 @@ export interface ILayerChannelDeps {
 export interface LayerConfig {
     id: Copper.LayerId;
     name: string;
+    disable?: boolean;
+    disabledChannels?: number[];
 }
 
 export interface ChannelConfig {
@@ -33,9 +35,9 @@ export interface ChannelConfig {
  * Layer configurations
  */
 export const LAYER_CONFIGS: LayerConfig[] = [
-    { id: 'layer1', name: 'Layer 1'},  // Green
-    { id: 'layer2', name: 'Layer 2' },  // Blue
-    { id: 'layer3', name: 'Layer 3' },  // Orange
+    { id: 'layer1', name: 'Layer 1' },  // Green
+    { id: 'layer2', name: 'Layer 2', disabledChannels: [2, 3, 4, 5, 6, 7, 8] },  // Blue
+    { id: 'layer3', name: 'Layer 3', disable: true },  // Orange
 ];
 
 /**
@@ -75,6 +77,19 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
         Object.fromEntries(LAYER_CONFIGS.map(l => [l.id, { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true }]))
     );
 
+    /** Layer disabled states */
+    const layerDisabled = ref<Record<Copper.LayerId, boolean>>(
+        Object.fromEntries(LAYER_CONFIGS.map(l => [l.id, l.disable ?? false]))
+    );
+
+    /** Channel disabled states (per layer) */
+    const channelDisabled = ref<Record<Copper.LayerId, Record<number, boolean>>>(
+        Object.fromEntries(LAYER_CONFIGS.map(l => [
+            l.id,
+            Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map(ch => [ch, l.disabledChannels?.includes(ch) ?? false]))
+        ]))
+    );
+
     /** Whether the controls are enabled (after images loaded) */
     const controlsEnabled = ref(false);
 
@@ -90,10 +105,10 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
      * Dynamic channel configs reflecting per-layer custom colors.
      * Automatically re-evaluates when activeLayer, colorVersion, or nrrdTools change.
      */
-        
+
     const dynamicChannelConfigs: ComputedRef<ChannelConfig[]> = computed(() => {
         colorVersion.value; // trigger reactivity on color changes
-        
+
         return ([1, 2, 3, 4, 5, 6, 7, 8] as Copper.ChannelValue[]).map(val => ({
             value: val,
             name: `Ch ${val}`,
@@ -155,6 +170,23 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
     }
 
     /**
+     * Disable/Enable layer
+     */
+    function setLayerDisabled(layerId: Copper.LayerId, disabled: boolean): void {
+        layerDisabled.value[layerId] = disabled;
+    }
+
+    /**
+     * Disable/Enable channel
+     */
+    function setChannelDisabled(layerId: Copper.LayerId, channel: number, disabled: boolean): void {
+        if (!channelDisabled.value[layerId]) {
+            channelDisabled.value[layerId] = {};
+        }
+        channelDisabled.value[layerId][channel] = disabled;
+    }
+
+    /**
      * Enable controls after images loaded
      */
     function enableControls(): void {
@@ -182,12 +214,12 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
     function syncFromManager(): void {
         const tools = deps.nrrdTools.value;
         if (!tools) return;
-        
+
         // Sync active layer and channel
         activeLayer.value = tools.getActiveLayer();
         activeChannel.value = tools.getActiveChannel() as Copper.ChannelValue;
 
-        
+
         // Sync visibility states
         const layerVis = tools.getLayerVisibility();
         const channelVis = tools.getChannelVisibility();
@@ -216,6 +248,8 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
         activeChannel,
         layerVisibility,
         channelVisibility,
+        layerDisabled,
+        channelDisabled,
         controlsEnabled,
 
         // Computed
@@ -228,6 +262,8 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
         setActiveChannel,
         toggleLayerVisibility,
         toggleChannelVisibility,
+        setLayerDisabled,
+        setChannelDisabled,
         enableControls,
         disableControls,
         refreshChannelColors,
