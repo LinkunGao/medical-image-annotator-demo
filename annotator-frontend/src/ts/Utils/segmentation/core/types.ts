@@ -121,9 +121,9 @@ export const MASK_CHANNEL_CSS_COLORS: Readonly<Record<number, string>> = {
 // ── Layer & Channel Types ────────────────────────────────────────────────
 
 /**
- * Layer identifier for the 3 independent mask layers.
+ * Layer identifier. Any string key is valid — layers are dynamically defined.
  */
-export type LayerId = 'layer1' | 'layer2' | 'layer3';
+export type LayerId = string;
 
 /**
  * Channel value (0 = transparent/erased, 1-8 = annotation channels).

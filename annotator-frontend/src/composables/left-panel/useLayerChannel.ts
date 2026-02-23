@@ -19,7 +19,6 @@ export interface ILayerChannelDeps {
 export interface LayerConfig {
     id: Copper.LayerId;
     name: string;
-    color: string;  // Display color for UI
 }
 
 export interface ChannelConfig {
@@ -34,9 +33,9 @@ export interface ChannelConfig {
  * Layer configurations
  */
 export const LAYER_CONFIGS: LayerConfig[] = [
-    { id: 'layer1', name: 'Layer 1', color: '#4CAF50' },  // Green
-    { id: 'layer2', name: 'Layer 2', color: '#2196F3' },  // Blue
-    { id: 'layer3', name: 'Layer 3', color: '#FF9800' },  // Orange
+    { id: 'layer1', name: 'Layer 1'},  // Green
+    { id: 'layer2', name: 'Layer 2' },  // Blue
+    { id: 'layer3', name: 'Layer 3' },  // Orange
 ];
 
 /**
@@ -67,18 +66,14 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
     const activeChannel = ref<Copper.ChannelValue>(1 as Copper.ChannelValue);
 
     /** Layer visibility states */
-    const layerVisibility = ref<Record<Copper.LayerId, boolean>>({
-        layer1: true,
-        layer2: true,
-        layer3: true,
-    });
+    const layerVisibility = ref<Record<Copper.LayerId, boolean>>(
+        Object.fromEntries(LAYER_CONFIGS.map(l => [l.id, true]))
+    );
 
     /** Channel visibility states (per layer) */
-    const channelVisibility = ref<Record<Copper.LayerId, Record<number, boolean>>>({
-        layer1: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true },
-        layer2: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true },
-        layer3: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true },
-    });
+    const channelVisibility = ref<Record<Copper.LayerId, Record<number, boolean>>>(
+        Object.fromEntries(LAYER_CONFIGS.map(l => [l.id, { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true }]))
+    );
 
     /** Whether the controls are enabled (after images loaded) */
     const controlsEnabled = ref(false);
@@ -187,9 +182,6 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
     function syncFromManager(): void {
         const tools = deps.nrrdTools.value;
         if (!tools) return;
-
-        // set channel color
-        tools.setChannelColor("layer2", 1, {r:116,g:50,b:32,a:255})
         
         // Sync active layer and channel
         activeLayer.value = tools.getActiveLayer();
@@ -200,9 +192,13 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
         const layerVis = tools.getLayerVisibility();
         const channelVis = tools.getChannelVisibility();
 
-        const layers: Copper.LayerId[] = ['layer1', 'layer2', 'layer3'];
+        // Iterate over all configured layers (derived from LAYER_CONFIGS, not hardcoded),
+        // so adding a new layer to LAYER_CONFIGS automatically includes it here.
+        const layers = LAYER_CONFIGS.map(l => l.id);
         layers.forEach(layerId => {
+            // Fall back to visible (true) if NrrdTools has no record for this layer yet
             layerVisibility.value[layerId] = layerVis[layerId] ?? true;
+            // Only overwrite channel visibility if NrrdTools actually has data for this layer
             if (channelVis[layerId]) {
                 channelVisibility.value[layerId] = { ...channelVis[layerId] };
             }

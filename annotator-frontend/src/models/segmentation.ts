@@ -126,7 +126,7 @@ export interface ILayerOutput {
 /**
  * Layer loading status
  */
-export type LayerId = 'layer1' | 'layer2' | 'layer3';
+export type LayerId = string;
 
 export interface ILayerStatus {
     layer: LayerId;

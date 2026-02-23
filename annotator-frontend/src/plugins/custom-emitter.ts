@@ -35,6 +35,8 @@ const eventNames = [
     "IntroGuide:OperationStatus",
     "IntroGuide:DrawerStatus",
     "toast:show",
+    "LayerChannel:RefreshColors",
+    "LayerChannel:ActiveChanged",
 ];
 type EventNames = (typeof eventNames)[number];
 

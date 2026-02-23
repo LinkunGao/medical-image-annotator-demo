@@ -125,6 +125,7 @@ const {
   enableControls,
   disableControls,
   syncFromManager,
+  refreshChannelColors,
 } = useLayerChannel({ nrrdTools });
 
 // ===== Logic =====
@@ -187,11 +188,13 @@ function onSelectLayer(layerId: Copper.LayerId): void {
     return;
   }
   setActiveLayer(layerId);
+  emitter.emit("LayerChannel:ActiveChanged", { layerId, channel: activeChannel.value });
 }
 
 function onSelectChannel(channel: Copper.ChannelValue): void {
   if (isChannelDisabled(channel)) return;
   setActiveChannel(channel);
+  emitter.emit("LayerChannel:ActiveChanged", { layerId: activeLayer.value, channel });
 }
 
 function onToggleLayerVisibility(layerId: Copper.LayerId): void {
@@ -223,12 +226,14 @@ onMounted(() => {
   emitter.on("Core:NrrdTools", emitterOnNrrdTools);
   emitter.on("Segmentation:FinishLoadAllCaseImages", emitterOnFinishLoadAllCaseImages);
   emitter.on("Segementation:CaseSwitched", emitterOnCaseSwitched);
+  emitter.on("LayerChannel:RefreshColors", refreshChannelColors);
 });
 
 onUnmounted(() => {
   emitter.off("Core:NrrdTools", emitterOnNrrdTools);
   emitter.off("Segmentation:FinishLoadAllCaseImages", emitterOnFinishLoadAllCaseImages);
   emitter.off("Segementation:CaseSwitched", emitterOnCaseSwitched);
+  emitter.off("LayerChannel:RefreshColors", refreshChannelColors);
 });
 </script>
 
