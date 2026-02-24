@@ -3,7 +3,6 @@ import {
   IDrawingEvents,
   IContrastEvents,
   IDrawOpts,
-  IPaintImages,
   ICommXY,
   ICommXYZ,
 } from "./coreTools/coreType";
@@ -95,10 +94,8 @@ export class DrawToolCore extends CommToolsData {
     this.sphereTool = new SphereTool(toolCtx, {
       setEmptyCanvasSize: (axis?) => this.setEmptyCanvasSize(axis),
       drawImageOnEmptyImage: (canvas) => this.drawImageOnEmptyImage(canvas),
-      storeImageToAxis: (index, paintedImages, imageData, axis?) =>
-        this.imageStoreHelper.storeImageToAxis(index, paintedImages, imageData, axis),
-      createEmptyPaintImage: (dimensions, paintImages) =>
-        this.createEmptyPaintImage(dimensions, paintImages),
+      storeImageToAxis: (index, imageData, axis?) =>
+        this.imageStoreHelper.storeImageToAxis(index, imageData, axis),
     });
 
     this.crosshairTool = new CrosshairTool(toolCtx);
@@ -1119,13 +1116,12 @@ export class DrawToolCore extends CommToolsData {
   /**
    * Clear mask on current slice canvas.
    *
-   * Phase 2: Clears the MaskVolume slice for all three layers,
-   * re-stores, and notifies external via getMask callback with clearFlag=true.
-   * Phase 6: Also records a MaskDelta for undo support.
+   * Only clears the active layer's MaskVolume slice data.
+   * Other layers are left untouched. After clearing, all layer canvases
+   * are re-rendered from MaskVolume to keep visuals in sync.
    */
   clearPaint() {
     this.protectedData.Is_Draw = true;
-    this.resetLayerCanvas();
     this.protectedData.canvases.originCanvas.width =
       this.protectedData.canvases.originCanvas.width;
     this.protectedData.mainPreSlices.repaint.call(
@@ -1134,7 +1130,7 @@ export class DrawToolCore extends CommToolsData {
     this.protectedData.previousDrawingImage =
       this.protectedData.ctxes.emptyCtx.createImageData(1, 1);
 
-    // Phase 2 + 6: Clear volume slices and record undo delta
+    // Clear only the active layer's MaskVolume slice and record undo delta
     try {
       const axis = this.protectedData.axis;
       const idx = this.nrrd_states.currentIndex;
@@ -1144,11 +1140,8 @@ export class DrawToolCore extends CommToolsData {
       // Capture old slice for undo before clearing
       const oldSlice = vol.getSliceUint8(idx, axis).data.slice();
 
-      // Clear only the active layer (clear also clears all for canvas consistency)
-      const { layer1, layer2, layer3 } = this.protectedData.maskData.volumes;
-      layer1.clearSlice(idx, axis);
-      layer2.clearSlice(idx, axis);
-      layer3.clearSlice(idx, axis);
+      // Clear only the active layer's MaskVolume slice
+      vol.clearSlice(idx, axis);
 
       // New (all-zero) slice for undo newSlice
       const { data: newSlice, width, height } = vol.getSliceUint8(idx, axis);
@@ -1177,13 +1170,24 @@ export class DrawToolCore extends CommToolsData {
         );
       }
     } catch {
-      // Volume not ready (1×1×1 placeholder) — continue with legacy path
+      // Volume not ready (1×1×1 placeholder)
     }
 
-    this.storeAllImages(this.nrrd_states.currentIndex, this.gui_states.layer);
-    const restLayers = this.getRestLayer();
-    this.storeEachLayerImage(this.nrrd_states.currentIndex, restLayers[0]);
-    this.storeEachLayerImage(this.nrrd_states.currentIndex, restLayers[1]);
+    // Re-render ALL layers from MaskVolume to canvas (rebuilds visuals from source of truth)
+    this.resetLayerCanvas();
+    const buffer = this.getOrCreateSliceBuffer(this.protectedData.axis);
+    if (buffer) {
+      const w = this.nrrd_states.changedWidth;
+      const h = this.nrrd_states.changedHeight;
+      for (const layerId of this.nrrd_states.layers) {
+        const target = this.protectedData.layerTargets.get(layerId);
+        if (!target) continue;
+        target.ctx.clearRect(0, 0, w, h);
+        this.renderSliceToCanvas(layerId, this.protectedData.axis, this.nrrd_states.currentIndex, buffer, target.ctx, w, h);
+      }
+    }
+    this.compositeAllLayers();
+
     this.setIsDrawFalse(1000);
   }
 
@@ -1296,25 +1300,15 @@ export class DrawToolCore extends CommToolsData {
 
   /****************************Store images (delegated to ImageStoreHelper)****************************************************/
 
-  storeImageToAxis(
-    index: number,
-    paintedImages: IPaintImages,
-    imageData: ImageData,
-    axis?: "x" | "y" | "z"
-  ) {
-    this.imageStoreHelper.storeImageToAxis(index, paintedImages, imageData, axis);
-  }
-
   storeAllImages(index: number, layer: string) {
     this.imageStoreHelper.storeAllImages(index, layer);
   }
 
   storeImageToLayer(
     index: number,
-    canvas: HTMLCanvasElement,
-    paintedImages: IPaintImages
+    canvas: HTMLCanvasElement
   ) {
-    return this.imageStoreHelper.storeImageToLayer(index, canvas, paintedImages);
+    return this.imageStoreHelper.storeImageToLayer(index, canvas);
   }
 
   storeEachLayerImage(index: number, layer: string) {

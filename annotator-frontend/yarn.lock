@@ -1709,10 +1709,10 @@ copper3d-tree@^1.0.1:
     ndarray-select "^1.0.0"
     typedarray-pool "^1.0.0"
 
-copper3d@^2.2.2:
-  version "2.2.2"
-  resolved "https://registry.yarnpkg.com/copper3d/-/copper3d-2.2.2.tgz#c12a4b2f79ce7997ecfcf2e1cc205fb91e093778"
-  integrity sha512-6fMHO14IAX5ywu3jZHF8tLQf/3hRwmwb9+iJxzozJyKIwaVyJXtkeFC8hNK46oyLKDYVHc9JkGsMWPYVxY7DNQ==
+copper3d@3.0.0:
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/copper3d/-/copper3d-3.0.0.tgz#dabc5d8da3957358c91b9f1c345a8da6475d7ad2"
+  integrity sha512-jCVV+JdDZ1PbGI+43nFNkXAq3MNqP5z3Mf4SoXh79xgBYnwB0f1tTezCMtC84FYEuV1UjNDASw9/Fycx5Sm+Vg==
   dependencies:
     "@types/dat.gui" "^0.7.9"
     "@types/three" "^0.169.0"

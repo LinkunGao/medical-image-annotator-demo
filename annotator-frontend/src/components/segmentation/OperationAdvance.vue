@@ -64,6 +64,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
 import * as Copper from "@/ts/index";
+// import * as Copper from "copper3d";
 
 /** Convert a hex color string (#rrggbb or #rrggbbaa) to an RGBA object */
 function hexToRgba(hex: string): { r: number; g: number; b: number; a: number } {

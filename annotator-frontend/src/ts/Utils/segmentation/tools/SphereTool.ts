@@ -11,7 +11,7 @@
 
 import { BaseTool } from "./BaseTool";
 import type { ToolContext } from "./BaseTool";
-import type { ICommXYZ, IPaintImages } from "../coreTools/coreType";
+import type { ICommXYZ } from "../coreTools/coreType";
 
 /**
  * Callbacks that DrawToolCore must provide for sphere operations.
@@ -21,13 +21,8 @@ export interface SphereCallbacks {
   drawImageOnEmptyImage: (canvas: HTMLCanvasElement) => void;
   storeImageToAxis: (
     index: number,
-    paintedImages: IPaintImages,
     imageData: ImageData,
     axis?: "x" | "y" | "z"
-  ) => void;
-  createEmptyPaintImage: (
-    dimensions: number[],
-    paintImages: IPaintImages
   ) => void;
 }
 
@@ -143,7 +138,6 @@ export class SphereTool extends BaseTool {
     );
     this.callbacks.storeImageToAxis(
       index,
-      this.ctx.protectedData.maskData.paintImages,
       imageData,
       axis
     );
@@ -282,12 +276,6 @@ export class SphereTool extends BaseTool {
   }
 
   clearSpherePrintStoreImages(): void {
-    this.ctx.protectedData.maskData.paintImages.x.length = 0;
-    this.ctx.protectedData.maskData.paintImages.y.length = 0;
-    this.ctx.protectedData.maskData.paintImages.z.length = 0;
-    this.callbacks.createEmptyPaintImage(
-      this.ctx.nrrd_states.dimensions,
-      this.ctx.protectedData.maskData.paintImages
-    );
+    // No-op: sphere images are no longer stored in Phase 3 volumetric model
   }
 }

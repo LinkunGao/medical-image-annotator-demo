@@ -11,20 +11,20 @@
  */
 import { ref, type Ref } from "vue";
 import * as Copper from "@/ts/index";
+// import * as Copper from "copper3d";
 
 /**
  * Interface for slice navigation dependencies
  */
 export interface ISliceNavigationDeps {
     nrrdTools: Ref<Copper.NrrdTools | undefined>;
-    segmentationManager?: Ref<Copper.SegmentationManager | undefined>;  // Phase 7
 }
 
 /**
  * Composable for slice navigation
  */
 export function useSliceNavigation(deps: ISliceNavigationDeps) {
-    const { nrrdTools, segmentationManager } = deps;
+    const { nrrdTools } = deps;
 
     /** Maximum slice number */
     const max = ref(0);

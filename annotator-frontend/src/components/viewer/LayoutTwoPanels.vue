@@ -75,9 +75,13 @@ const leftPanelWidth = ref(1000);
 /** Current right panel width (exposed for external use) */
 const rightPanelWidth = ref(600);
 
+/** Current left panel percentage of total width (exposed for external use) */
+const percent = ref(65);
+
 defineExpose({
 leftPanelWidth,
 rightPanelWidth,
+percent,
 })
 
 /** Whether split bar is currently being dragged */
@@ -127,26 +131,27 @@ function moveSplitLine(e: MouseEvent) {
         const minLeft = containerRect.left;
         const maxLeft =
         containerRect.right - (splitBar.value as HTMLDivElement).offsetWidth;
-        let percent = ((mousePosition - minLeft) / (maxLeft - minLeft)) * 100;
-        // if (percent < 0 || percent > 100) {
+        let splitPercent = ((mousePosition - minLeft) / (maxLeft - minLeft)) * 100;
+        // if (splitPercent < 0 || splitPercent > 100) {
         //   return;
         // }
-        if (percent < 10) {
-            percent = 1;
+        if (splitPercent < 10) {
+            splitPercent = 1;
             (mainContainer.value as HTMLDivElement).style.gridTemplateColumns =
-                percent - 1 + "% 1%" + (100 - percent) + "%";
-            } else if (percent > 90) {
-            percent = 100;
+                splitPercent - 1 + "% 1%" + (100 - splitPercent) + "%";
+            } else if (splitPercent > 90) {
+            splitPercent = 100;
             (mainContainer.value as HTMLDivElement).style.gridTemplateColumns =
-                percent - 1 + "% 1%" + (100 - percent) + "%";
+                splitPercent - 1 + "% 1%" + (100 - splitPercent) + "%";
             } else {
             (mainContainer.value as HTMLDivElement).style.gridTemplateColumns =
-                percent - 1 + "% 1%" + (100 - percent) + "%";
+                splitPercent - 1 + "% 1%" + (100 - splitPercent) + "%";
         }
         leftPanelWidth.value = left_container.value?.getBoundingClientRect()
         .width as number;
         rightPanelWidth.value = right_container.value?.getBoundingClientRect()
         .width as number;
+        percent.value = splitPercent;
     }
 }
 

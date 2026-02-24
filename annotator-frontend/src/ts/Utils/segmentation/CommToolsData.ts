@@ -4,15 +4,13 @@ import {
   IGUIStates,
   INrrdStates,
   ICursorPage,
-  IPaintImage,
-  IPaintImages,
   IConvertObjType,
   ICommXYZ,
   INewMaskData,
   ILayerRenderTarget,
   IKeyBoardSettings
 } from "./coreTools/coreType";
-import { MaskVolume } from "./core";
+import { MaskVolume } from "./core/index";
 import { switchPencilIcon } from "../utils";
 import { enableDownload } from "./coreTools/divControlTools";
 
@@ -402,17 +400,6 @@ export class CommToolsData {
     );
   }
   /**
-   * Rewrite this {createEmptyPaintImage} function under NrrdTools
-   */
-  createEmptyPaintImage(
-    dimensions: Array<number>,
-    paintImages: IPaintImages
-  ) {
-    throw new Error(
-      "Child class must implement abstract clearStoreImages, currently you can find it in NrrdTools."
-    );
-  }
-  /**
    * Rewrite this {resizePaintArea} function under NrrdTools
    */
   resizePaintArea(factor: number) {
@@ -500,18 +487,18 @@ export class CommToolsData {
   }
 
   /**
-   * Get a painted mask image (IPaintImage) based on current axis and input slice index.
+   * Get a painted mask image based on current axis and input slice index.
    *
-   * Phase 3: Reads directly from MaskVolume (no caching needed — reads are fast).
+   * Phase 3: Reads directly from MaskVolume.
    *
    * @param axis "x" | "y" | "z"
    * @param sliceIndex number
-   * @returns IPaintImage with the mask for the given slice, or undefined if not found
+   * @returns Object with index and image, or undefined
    */
   filterDrawedImage(
     axis: "x" | "y" | "z",
     sliceIndex: number
-  ): IPaintImage | undefined {
+  ): { index: number; image: ImageData } | undefined {
     try {
       const volume = this.getCurrentVolume();
       if (volume) {
@@ -571,7 +558,7 @@ export class CommToolsData {
   /**
    * Render a layer's slice into a reusable buffer and draw to the target canvas.
    *
-   * Uses MaskVolume.getSliceRawImageDataInto() for zero-allocation rendering.
+   * Uses MaskVolume.renderLabelSliceInto() for zero-allocation rendering.
    * The caller should obtain the buffer via getOrCreateSliceBuffer() and reuse
    * it across multiple layer renders.
    *

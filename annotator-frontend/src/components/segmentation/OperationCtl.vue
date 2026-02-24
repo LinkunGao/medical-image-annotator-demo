@@ -79,6 +79,7 @@ import { ref, onMounted, onUnmounted } from "vue";
 import { storeToRefs } from "pinia";
 import emitter from "@/plugins/custom-emitter";
 import * as Copper from "@/ts/index";
+// import * as Copper from "copper3d";
 
 import { setTumourStudyPointPosition } from "@/components/viewer/utils";
 

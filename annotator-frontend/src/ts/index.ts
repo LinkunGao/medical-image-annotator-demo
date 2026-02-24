@@ -42,12 +42,12 @@ import {
 } from "./types/types";
 
 import { IPaintImage, ICommXYZ, IGUIStates, IGuiParameterSettings, INrrdStates } from "./Utils/segmentation/coreTools/coreType";
-import { CHANNEL_COLORS, CHANNEL_HEX_COLORS, rgbaToHex, rgbaToCss } from "./Utils/segmentation/core";
-import type { LayerId, ChannelValue } from "./Utils/segmentation/core";
+import { CHANNEL_COLORS, CHANNEL_HEX_COLORS, rgbaToHex, rgbaToCss } from "./Utils/segmentation/core/index";
+import type { LayerId, ChannelValue } from "./Utils/segmentation/core/index";
 
 import "./css/style.css";
 
-export const REVISION = "v2.3.0";
+export const REVISION = "v3.0.1-beta";
 
 console.log(
   `%cCopper3D Visualisation %cBeta:${REVISION}`,

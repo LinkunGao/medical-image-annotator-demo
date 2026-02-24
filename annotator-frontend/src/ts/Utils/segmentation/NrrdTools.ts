@@ -1296,6 +1296,9 @@ export class NrrdTools extends DrawToolCore {
 
     // Invalidate reusable slice buffer
     this.invalidateSliceBuffer();
+
+    // Reload all layers to canvas (restores other layers' visuals)
+    this.reloadMasksFromVolume();
   }
 
   /**
