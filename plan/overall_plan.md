@@ -377,7 +377,7 @@ export type ViewState = Pick<INrrdStates,
 export type SphereToolState = Pick<INrrdStates,
   'sphereOrigin' | 'sphereRadius' | 'spherePlanB' |
   'tumourSphereOrigin' | 'skinSphereOrigin' | 'ribSphereOrigin' | 'nippleSphereOrigin'> &
-  Pick<IGUIStates, 'sphere' | 'calculator' | 'cal_distance'>;
+  Pick<IGUIStates, 'sphere' | 'calculator' | 'activeSphereType'>;
 
 export type InteractionState = Pick<IProtected,
   'Is_Shift_Pressed' | 'Is_Ctrl_Pressed' | 'Is_Draw'> &

@@ -145,10 +145,10 @@ export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
         }
 
         // Send status to calculator component
-        if (nrrdTools.value!.gui_states.cal_distance !== "tumour") {
+        if (nrrdTools.value!.gui_states.activeSphereType !== "tumour") {
             emitter.emit(
                 "SegmentationTrial:CalulatorTimerFunction",
-                nrrdTools.value!.gui_states.cal_distance
+                nrrdTools.value!.gui_states.activeSphereType
             );
         }
     };

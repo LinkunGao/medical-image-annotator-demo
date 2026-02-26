@@ -813,7 +813,7 @@ export class MaskVolume {
    *
    * @example
    * ```ts
-   * vol.clear();
+   * vol.reset();
    * vol.getVoxel(256, 256, 50); // 0
    * ```
    */

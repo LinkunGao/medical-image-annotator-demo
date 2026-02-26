@@ -19,8 +19,10 @@ import {
 } from "./coreTools/coreType";
 import { DragOperator } from "./DragOperator";
 import { DrawToolCore } from "./DrawToolCore";
-import { MaskVolume, CHANNEL_HEX_COLORS, rgbaToHex, rgbaToCss } from "./core";
+import { MaskVolume, CHANNEL_HEX_COLORS, MASK_CHANNEL_COLORS, rgbaToHex, rgbaToCss } from "./core";
 import type { ChannelValue, RGBAColor, ChannelColorMap } from "./core";
+import { SPHERE_CHANNEL_MAP, SPHERE_LABELS } from "./tools/SphereTool";
+import type { SphereType } from "./tools/SphereTool";
 
 /**
  * Core NRRD annotation tool for medical image segmentation.
@@ -129,8 +131,8 @@ export class NrrdTools extends DrawToolCore {
       protectedData: this.protectedData,
       removeDragMode: this.dragOperator.removeDragMode,
       configDragMode: this.dragOperator.configDragMode,
-      clearPaint: this.clearPaint,
-      clearStoreImages: this.clearStoreImages,
+      clearActiveLayer: this.clearActiveLayer,
+      clearActiveSlice: this.clearActiveSlice,
       updateSlicesContrast: this.updateSlicesContrast,
       setMainAreaSize: this.setMainAreaSize,
       resetPaintAreaUIPosition: this.resetPaintAreaUIPosition,
@@ -180,6 +182,19 @@ export class NrrdTools extends DrawToolCore {
   setActiveChannel(channel: ChannelValue): void {
     this.gui_states.activeChannel = channel;
     this.syncBrushColor();
+  }
+
+  /**
+   * Set the active sphere type for the SphereTool.
+   * Replaces direct mutation of `gui_states.activeSphereType`.
+   *
+   * @example
+   * ```ts
+   * nrrdTools.setActiveSphereType('nipple');
+   * ```
+   */
+  setActiveSphereType(type: SphereType): void {
+    this.gui_states.activeSphereType = type;
   }
 
   /**
@@ -628,14 +643,15 @@ export class NrrdTools extends DrawToolCore {
 
     // Create dedicated SphereMaskVolume for 3D sphere data.
     // Separate from layer volumes to avoid polluting draw mask data.
-    // Cleared in clear() when switching cases.
+    // Cleared in reset() when switching cases.
     this.nrrd_states.sphereMaskVolume = new MaskVolume(vw, vh, vd, 1);
-    // Configure sphere label colors:
-    // label 1 (tumour/default) = Green, 2 (skin) = Yellow, 3 (nipple) = Magenta, 4 (ribcage) = Blue
-    this.nrrd_states.sphereMaskVolume.setChannelColor(1, { r: 0, g: 255, b: 0, a: 255 });
-    this.nrrd_states.sphereMaskVolume.setChannelColor(2, { r: 255, g: 255, b: 0, a: 255 });
-    this.nrrd_states.sphereMaskVolume.setChannelColor(3, { r: 255, g: 0, b: 255, a: 255 });
-    this.nrrd_states.sphereMaskVolume.setChannelColor(4, { r: 0, g: 0, b: 255, a: 255 });
+    // Derive sphere label colors from SPHERE_CHANNEL_MAP → MASK_CHANNEL_COLORS
+    // so that volume rendering matches the preview circle colors.
+    for (const [type, { channel }] of Object.entries(SPHERE_CHANNEL_MAP)) {
+      const label = SPHERE_LABELS[type as SphereType];
+      const c = MASK_CHANNEL_COLORS[channel];
+      this.nrrd_states.sphereMaskVolume.setChannelColor(label, { r: c.r, g: c.g, b: c.b, a: c.a });
+    }
 
     this.nrrd_states.spaceOrigin = (
       randomSlice.x.volume.header.space_origin as number[]
@@ -970,7 +986,14 @@ export class NrrdTools extends DrawToolCore {
     this.resetDisplaySlicesStatus();
   }
 
-  clear() {
+  /**
+   * Reset the entire NrrdTools instance comprehensively.
+   * This clears ALL data across ALL layers globally, resets the Canvas visuals,
+   * undo/redo history, volume models, index parameters, and sphere overlays.
+   * Primarily used when switching cases/datasets or when a completely fresh state is needed.
+   * It is heavier than `clearActiveLayer` or `clearActiveSlice`.
+   */
+  reset() {
     // To effectively reduce the js memory garbage
     this.protectedData.allSlicesArray.length = 0;
     this.protectedData.displaySlices.length = 0;
@@ -1258,7 +1281,14 @@ export class NrrdTools extends DrawToolCore {
     this.protectedData.mainAreaContainer.appendChild(loadingbar);
   }
 
-  clearStoreImages() {
+  /**
+   * Clear all annotations on the currently active layer across its entire 3D volume.
+   * This resets all voxels globally for the active layer's `MaskVolume` (depth, width, height)
+   * and triggers the `onClearLayerVolume` event to sync the wiped volume to the backend.
+   * It also clears the undo/redo stack for the active layer ONLY.
+   * Other background layers are not impacted by this operation.
+   */
+  clearActiveLayer() {
     // Phase 3 Task 3.1: Only clear the active layer's MaskVolume
     if (this.nrrd_states.dimensions.length === 3) {
       const [w, h, d] = this.nrrd_states.dimensions;

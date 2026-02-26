@@ -352,7 +352,7 @@ watch(filesCount, ()=>{
   ) {
     console.log("All files ready!");
 
-    nrrdTools!.clear();
+    nrrdTools!.reset();
     nrrdTools!.setAllSlices(allSlices);
 
     if (firstLoad) {

@@ -519,8 +519,8 @@ export class DrawToolCore extends CommToolsData {
       ];
       this.setUpSphereOrigins(mouseX, mouseY, this.nrrd_states.currentIndex);
 
-      // Store origin for the active cal_distance type
-      const calPos = this.gui_states.cal_distance;
+      // Store origin for the active sphere type
+      const calPos = this.gui_states.activeSphereType;
       switch (calPos) {
         case "tumour":
           this.nrrd_states.tumourSphereOrigin = JSON.parse(JSON.stringify(this.nrrd_states.sphereOrigin));
@@ -1062,13 +1062,17 @@ export class DrawToolCore extends CommToolsData {
   /**************************** Undo/Redo functions (Phase 6 — Delta-based) ****************************/
 
   /**
-   * Clear mask on current slice canvas.
-   *
-   * Only clears the active layer's MaskVolume slice data.
-   * Other layers are left untouched. After clearing, all layer canvases
-   * are re-rendered from MaskVolume to keep visuals in sync.
+   * Clear the mask on the current slice canvas for the active layer ONLY.
+   * 
+   * This method only clears the active layer's MaskVolume slice data for the 
+   * currently viewed slice index. Other slices in the same layer remain intact.
+   * Other background layers are also left untouched. 
+   * After clearing, all layer canvases are re-rendered from the `MaskVolume` 
+   * to keep the visuals in sync.
+   * 
+   * The operation is recorded to the UndoManager to allow for user rollback.
    */
-  clearPaint() {
+  clearActiveSlice() {
     this.protectedData.Is_Draw = true;
     this.protectedData.canvases.originCanvas.width =
       this.protectedData.canvases.originCanvas.width;
@@ -1092,7 +1096,7 @@ export class DrawToolCore extends CommToolsData {
       // New (all-zero) slice for undo newSlice
       const { data: newSlice, width, height } = vol.getSliceUint8(idx, axis);
 
-      // Push clearPaint delta to UndoManager (supports undo)
+      // Push clearActiveSlice delta to UndoManager (supports undo)
       this.undoManager.push({
         layerId: activeLayer,
         axis,

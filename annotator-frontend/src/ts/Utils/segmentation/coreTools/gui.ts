@@ -9,7 +9,7 @@ import {
 } from "./coreType";
 import { DragOperator } from "../DragOperator";
 import { CHANNEL_HEX_COLORS, rgbaToHex } from "../core";
-import { SPHERE_COLORS } from "../tools/SphereTool";
+import { SPHERE_CHANNEL_MAP } from "../tools/SphereTool";
 import type { SphereType } from "../tools/SphereTool";
 
 interface IConfigGUI {
@@ -26,8 +26,8 @@ interface IConfigGUI {
   mainPreSlices: any;
   removeDragMode: () => void;
   configDragMode: () => void;
-  clearPaint: () => void;
-  clearStoreImages: () => void;
+  clearActiveSlice: () => void;
+  clearActiveLayer: () => void;
   updateSlicesContrast: (value: number, flag: string) => void;
   setMainAreaSize: (factor: number) => void;
   resetPaintAreaUIPosition: () => void;
@@ -106,7 +106,7 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
   const advanceFolder = configs.modeFolder.addFolder("AdvanceSettings");
 
   advanceFolder
-    .add(configs.gui_states, "cal_distance", ["tumour", "skin", "ribcage", "nipple"])
+    .add(configs.gui_states, "activeSphereType", ["tumour", "skin", "ribcage", "nipple"])
     .name("Layer")
     .onChange((val) => {
       updateCalDistance(val)
@@ -294,7 +294,11 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
   };
 
   const updateCalDistance = (val: "tumour" | "skin" | "ribcage" | "nipple") => {
-    const color = SPHERE_COLORS[val as SphereType];
+    const { layer, channel } = SPHERE_CHANNEL_MAP[val as SphereType];
+    const volume = configs.getVolumeForLayer(layer);
+    const color = volume
+      ? rgbaToHex(volume.getChannelColor(channel))
+      : (CHANNEL_HEX_COLORS[channel] || '#00ff00');
     configs.gui_states.fillColor = color;
     configs.gui_states.brushColor = color;
   }
@@ -339,7 +343,7 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
       name: "Eraser",
       onChange: updateGuiEraserState,
     },
-    cal_distance: {
+    activeSphereType: {
       name: "CalculatorDistance",
       onChange: updateCalDistance
     },

@@ -69,10 +69,6 @@ export class CommToolsData {
     skinSphereOrigin: null,
     ribSphereOrigin: null,
     nippleSphereOrigin: null,
-    tumourColor: CHANNEL_HEX_COLORS[1],
-    skinColor: CHANNEL_HEX_COLORS[4],
-    ribcageColor: CHANNEL_HEX_COLORS[3],
-    nippleColor: CHANNEL_HEX_COLORS[5],
 
     sphereMaskVolume: null,
     sphereRadius: 5,
@@ -138,21 +134,21 @@ export class CommToolsData {
     brushAndEraserSize: 10,
     cursor: "dot",
     layer: "layer1",
-    cal_distance: "tumour",
+    activeSphereType: "tumour",
     sphere: false,
     readyToUpdate: true,
     defaultPaintCursor: switchPencilIcon("dot"),
     max_sensitive: 100,
     // EraserSize: 25,
     clear: () => {
-      this.clearPaint();
+      this.clearActiveSlice();
     },
     clearAll: () => {
       const text = "Are you sure remove annotations on All slice?";
       if (confirm(text) === true) {
         this.nrrd_states.clearAllFlag = true;
-        this.clearPaint();
-        this.clearStoreImages();
+        this.clearActiveSlice();
+        this.clearActiveLayer();
       }
       this.nrrd_states.clearAllFlag = false;
     },
@@ -366,11 +362,11 @@ export class CommToolsData {
   }
 
   /**
-   * Rewrite this {clearPaint} function under DrawToolCore
+   * Rewrite this {clearActiveSlice} function under DrawToolCore
    */
-  clearPaint() {
+  clearActiveSlice() {
     throw new Error(
-      "Child class must implement abstract clearPaint, currently you can find it in DrawToolCore."
+      "Child class must implement abstract clearActiveSlice, currently you can find it in DrawToolCore."
     );
   }
   /**
@@ -390,11 +386,11 @@ export class CommToolsData {
     );
   }
   /**
-   * Rewrite this {clearStoreImages} function under NrrdTools
+   * Rewrite this {clearActiveLayer} function under NrrdTools
    */
-  clearStoreImages() {
+  clearActiveLayer() {
     throw new Error(
-      "Child class must implement abstract clearStoreImages, currently you can find it in NrrdTools."
+      "Child class must implement abstract clearActiveLayer, currently you can find it in NrrdTools."
     );
   }
   /**

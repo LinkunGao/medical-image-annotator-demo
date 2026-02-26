@@ -276,13 +276,13 @@ nrrdTools.draw({
 
 ### 5.3 SphereTool — 3D Sphere Placement & Distance Calculator
 
-The SphereTool provides unified sphere placement with 4 sphere types controlled by `gui_states.cal_distance`. The active type determines which origin and color are used. The old separate "Calculator" mode has been merged into SphereTool.
+The SphereTool provides unified sphere placement with 4 sphere types controlled by `gui_states.activeSphereType`. The active type determines which origin and color are used. The old separate "Calculator" mode has been merged into SphereTool.
 
 #### Sphere Types & Channel Mapping
 
-Each sphere type maps to a specific channel on layer1. Switch between types using `gui_states.cal_distance`:
+Each sphere type maps to a specific channel on layer1. Switch between types using `gui_states.activeSphereType`:
 
-| Sphere Type | Channel | Default Color | `cal_distance` value |
+| Sphere Type | Channel | Default Color | `activeSphereType` value |
 |-------------|---------|---------------|---------------------|
 | tumour      | 1       | `#00ff00` (green) | `"tumour"` (default) |
 | ribcage     | 3       | `#0000ff` (blue) | `"ribcage"` |
@@ -295,7 +295,7 @@ These mappings are exported as `SPHERE_CHANNEL_MAP` and `SPHERE_COLORS` from `to
 
 ```typescript
 // Switch to skin sphere type
-gui_states.cal_distance = "skin";
+gui_states.activeSphereType = "skin";
 // The next sphere placed will use channel 4 (yellow)
 // Origin is stored in nrrd_states.skinSphereOrigin
 ```
@@ -307,7 +307,7 @@ Sphere mode activated (gui_states.sphere = true, keyboard shortcut: 'q'):
   ├─ Shift key DISABLED (no draw mode)
   ├─ Crosshair toggle allowed (S key)
   │
-  ├─ Left-click DOWN → record origin for current cal_distance type,
+  ├─ Left-click DOWN → record origin for current activeSphereType type,
   │                     show preview, bind sphere wheel
   ├─ Scroll wheel (while holding) → adjust radius [1, 50]
   └─ Left-click UP → write all placed spheres to volume,
@@ -931,13 +931,19 @@ function buildColorLegend(nrrdTools: Copper.NrrdTools, layerId: string) {
 There are different levels of clearing data depending on the use case:
 
 ```typescript
-// 1. Clear ALL data across ALL layers (typically used when switching cases)
-nrrdTools.clear();
+// 1. Clear ALL data across ALL layers comprehensively (typically used when switching cases)
+// This clears all volumes, undo histories, UI canvases, index parameters, and sphere data globally.
+nrrdTools.reset();
 
-// 2. Clear ONLY the currently active layer (e.g. user clicks "Clear Layer" button)
-// This clears the layer's MaskVolume, clears its undo/redo history, and re-renders the canvas.
+// 2. Clear all annotations on the currently active layer across its entire 3D volume
+// This clears the active layer's MaskVolume, clears its undo/redo history, and re-renders the canvas.
 // It also triggers the `onClearLayerVolume` callback so you can notify the backend.
-nrrdTools.clearStoreImages();
+nrrdTools.clearActiveLayer();
+
+// 3. Clear the mask ONLY on the currently viewed 2D slice for the active layer
+// This removes annotations specifically on the current slice index and orientation.
+// It records an undo operation to allow rollback.
+nrrdTools.clearActiveSlice();
 ```
 
 ---
@@ -1106,8 +1112,9 @@ type ChannelValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 | | `enableContrastDragEvents(cb)` | Enable Ctrl+drag windowing |
 | | `setDisplaySliceIndexPanel(el)` | Show slice index in a panel |
 | | `setBaseDrawDisplayCanvasesSize(n)` | Set canvas resolution multiplier (1-8) |
-| **Data** | `clear()` | Reset all volumes, undo histories, and sphere data |
-| | `clearStoreImages()` | Clear annotations and undo history for the *currently active layer* |
+| **Data** | `reset()` | Reset all volumes, undo histories, canvases, and sphere data |
+| | `clearActiveLayer()` | Clear annotations and undo history for the *currently active layer* |
+| | `clearActiveSlice()` | Clear annotations exclusively on the *currently viewed slice* of the active layer |
 | | `setAllSlices(slices)` | Load NRRD slices, init MaskVolumes |
 | | `setMasksFromNIfTI(map)` | Load saved NIfTI voxel data |
 | **Render** | `start` | Frame callback — pass to render loop |

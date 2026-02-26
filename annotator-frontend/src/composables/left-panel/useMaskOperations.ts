@@ -200,7 +200,7 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
     /**
      * Handles layer volume clear notification
      *
-     * Phase 3 Task 3.2: When clearStoreImages is called on a layer,
+     * Phase 3 Task 3.2: When clearActiveLayer is called on a layer,
      * notify the backend to clear that layer's NIfTI file.
      */
     const onClearLayerVolume = async (event: { layerId: string }) => {

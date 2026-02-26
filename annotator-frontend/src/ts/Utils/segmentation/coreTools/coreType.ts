@@ -150,7 +150,7 @@ interface IGUIStates {
   brushAndEraserSize: number;
   cursor: string;
   layer: string;
-  cal_distance: "tumour" | "skin" | "nipple" | "ribcage";
+  activeSphereType: "tumour" | "skin" | "nipple" | "ribcage";
   sphere: boolean;
   // subView: boolean;
   // subViewScale: number;
@@ -215,14 +215,11 @@ interface INrrdStates {
   skinSphereOrigin: ICommXYZ | null,
   ribSphereOrigin: ICommXYZ | null,
   nippleSphereOrigin: ICommXYZ | null,
-  tumourColor: string,
-  skinColor: string,
-  ribcageColor: string,
-  nippleColor: string,
+
   /**
    * Dedicated MaskVolume for SphereTool 3D sphere data.
    * Separate from layer volumes to avoid polluting draw mask data.
-   * Created in setAllSlices(), cleared in clear().
+   * Created in setAllSlices(), cleared in reset().
    * Type is `any` here to avoid circular deps (actual type: MaskVolume).
    */
   sphereMaskVolume: any;
@@ -322,7 +319,7 @@ interface IGuiParameterSettings {
     name: "Eraser",
     onChange: () => void,
   },
-  cal_distance: {
+  activeSphereType: {
     name: "CalculatorDistance",
     onChange: (val: "tumour" | "skin" | "ribcage" | "nipple") => void
   }

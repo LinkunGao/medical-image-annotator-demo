@@ -189,7 +189,7 @@ npx tsc --noEmit
    - 左键按下 → 出现预览圆 → 滚轮调整大小 → 松开左键
    - 确认 sphere 颜色正确（绿色 = tumour）
 3. **Calculator 模式**:
-   - 切换 `cal_distance` 为 tumour / skin / ribcage / nipple
+   - 切换 `activeSphereType` 为 tumour / skin / ribcage / nipple
    - 确认每种颜色正确
    - 确认 channel 号正确 (`getChannelForSphereType()`)
 4. **Callbacks**: 确认 `getSphereData` 和 `getCalculateSpherePositionsData` 正确触发

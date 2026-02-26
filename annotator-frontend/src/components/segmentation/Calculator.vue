@@ -176,23 +176,23 @@ function calculatorTimerReport(status:string){
 function toggleCalculatorPickerRadios(val: string | null) {
   if (val === "skin"){
     // "tumour" | "skin" | "nipple" | "ribcage"
-    guiSettings.value.guiState["cal_distance"] = "skin";
+    guiSettings.value.guiState["activeSphereType"] = "skin";
   }
   if (val === "nipple"){
-    guiSettings.value.guiState["cal_distance"] = "nipple";
+    guiSettings.value.guiState["activeSphereType"] = "nipple";
   }
   if (val === "ribcage"){
-    guiSettings.value.guiState["cal_distance"] = "ribcage";
+    guiSettings.value.guiState["activeSphereType"] = "ribcage";
   }
 
-  guiSettings.value.guiSetting["cal_distance"].onChange(calculatorPickerRadios.value);
+  guiSettings.value.guiSetting["activeSphereType"].onChange(calculatorPickerRadios.value);
 
 }
 
 function onBtnClick(val:string){
   if (!!guiSettings.value){
     calculatorPickerRadios.value = "tumour";
-    guiSettings.value.guiState["cal_distance"] = "tumour";
+    guiSettings.value.guiState["activeSphereType"] = "tumour";
     calculatorPickerRadiosDisabled.value = true;
 
     calculatorTimerReport("finish")

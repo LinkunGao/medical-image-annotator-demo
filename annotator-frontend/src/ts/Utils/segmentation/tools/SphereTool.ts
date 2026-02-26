@@ -30,7 +30,7 @@
  * ## SphereMaskVolume
  * Sphere 3D data is stored in a dedicated MaskVolume (nrrd_states.sphereMaskVolume)
  * separate from the layer draw mask volumes, to avoid polluting layer1's draw data.
- * This volume is created in setAllSlices() and cleared in clear().
+ * This volume is created in setAllSlices() and cleared in reset().
  *
  * ## Future: Writing to Layer MaskVolume
  * Currently sphere data does NOT write to layer1's MaskVolume.
@@ -71,26 +71,12 @@ export type SphereType = 'tumour' | 'skin' | 'nipple' | 'ribcage';
  */
 export const SPHERE_CHANNEL_MAP: Record<SphereType, { layer: string; channel: number }> = {
   tumour: { layer: 'layer1', channel: 1 },
+  nipple: { layer: 'layer1', channel: 2 },
   ribcage: { layer: 'layer1', channel: 3 },
   skin: { layer: 'layer1', channel: 4 },
-  nipple: { layer: 'layer1', channel: 5 },
 };
 
-/**
- * Color for each sphere type — derived from channel default colors.
- * These match CHANNEL_HEX_COLORS for the corresponding channel.
- *
- * tumour  → channel 1 → #00ff00 (Green)
- * ribcage → channel 3 → #0000ff (Blue)
- * skin    → channel 4 → #ffff00 (Yellow)
- * nipple  → channel 5 → #ff00ff (Magenta)
- */
-export const SPHERE_COLORS: Record<SphereType, string> = {
-  tumour: CHANNEL_HEX_COLORS[SPHERE_CHANNEL_MAP.tumour.channel],
-  skin: CHANNEL_HEX_COLORS[SPHERE_CHANNEL_MAP.skin.channel],
-  ribcage: CHANNEL_HEX_COLORS[SPHERE_CHANNEL_MAP.ribcage.channel],
-  nipple: CHANNEL_HEX_COLORS[SPHERE_CHANNEL_MAP.nipple.channel],
-};
+// SPHERE_COLORS was removed to enforce dynamic color lookups.
 
 /**
  * Label values for sphere types stored in sphereMaskVolume.
@@ -100,9 +86,9 @@ export const SPHERE_COLORS: Record<SphereType, string> = {
 export const SPHERE_LABELS: Record<SphereType | 'default', number> = {
   default: 1,
   tumour: 1,
-  skin: 2,
-  nipple: 3,
-  ribcage: 4,
+  nipple: 2,
+  ribcage: 3,
+  skin: 4,
 };
 
 /**
@@ -181,7 +167,7 @@ export class SphereTool extends BaseTool {
       const b = rgba.b.toString(16).padStart(2, '0');
       return `#${r}${g}${b}`;
     }
-    return SPHERE_COLORS[type];
+    return CHANNEL_HEX_COLORS[channel];
   }
 
   // ===== Sphere Canvas Size =====
@@ -253,7 +239,8 @@ export class SphereTool extends BaseTool {
    */
   drawSphere(mouseX: number, mouseY: number, radius: number): void {
     const [, ctx] = this.clearSphereCanvas();
-    drawSphereCore(ctx, mouseX, mouseY, radius, this.ctx.gui_states.fillColor);
+    const color = this.getColorForSphereType(this.ctx.gui_states.activeSphereType);
+    drawSphereCore(ctx, mouseX, mouseY, radius, color);
   }
 
   // ===== Sphere Wheel =====
@@ -324,8 +311,8 @@ export class SphereTool extends BaseTool {
     const ctx = this.ctx.protectedData.ctxes.drawingSphereCtx;
     const canvas = this.ctx.protectedData.canvases.drawingSphereCanvas;
 
-    // Use the current fill color (set by sphere mode)
-    const color = this.ctx.gui_states.fillColor;
+    // Use the dynamic type color instead of the static fillColor
+    const color = this.getColorForSphereType(this.ctx.gui_states.activeSphereType);
 
     if (preIndex === nextIndex) {
       this.drawSphereCore(ctx, mouseX, mouseY, this.ctx.nrrd_states.sphereRadius, color);
@@ -372,18 +359,18 @@ export class SphereTool extends BaseTool {
     const canvas = this.ctx.protectedData.canvases.drawingSphereCanvas;
     const nrrd = this.ctx.nrrd_states;
 
-    // Build position list with sphere type colors from SPHERE_COLORS
+    // Build position list with dynamic sphere type colors
     const tumourPosition = nrrd.tumourSphereOrigin
-      ? Object.assign(this.getSpherePosition(nrrd.tumourSphereOrigin as ICommXYZ, axis), { color: SPHERE_COLORS.tumour })
+      ? Object.assign(this.getSpherePosition(nrrd.tumourSphereOrigin as ICommXYZ, axis), { color: this.getColorForSphereType('tumour') })
       : null;
     const skinPosition = nrrd.skinSphereOrigin
-      ? Object.assign(this.getSpherePosition(nrrd.skinSphereOrigin as ICommXYZ, axis), { color: SPHERE_COLORS.skin })
+      ? Object.assign(this.getSpherePosition(nrrd.skinSphereOrigin as ICommXYZ, axis), { color: this.getColorForSphereType('skin') })
       : null;
     const ribcagePosition = nrrd.ribSphereOrigin
-      ? Object.assign(this.getSpherePosition(nrrd.ribSphereOrigin as ICommXYZ, axis), { color: SPHERE_COLORS.ribcage })
+      ? Object.assign(this.getSpherePosition(nrrd.ribSphereOrigin as ICommXYZ, axis), { color: this.getColorForSphereType('ribcage') })
       : null;
     const nipplePosition = nrrd.nippleSphereOrigin
-      ? Object.assign(this.getSpherePosition(nrrd.nippleSphereOrigin as ICommXYZ, axis), { color: SPHERE_COLORS.nipple })
+      ? Object.assign(this.getSpherePosition(nrrd.nippleSphereOrigin as ICommXYZ, axis), { color: this.getColorForSphereType('nipple') })
       : null;
 
     const positionGroup: any[] = [];
@@ -442,16 +429,16 @@ export class SphereTool extends BaseTool {
     const axis = this.ctx.protectedData.axis;
 
     if (nrrd.tumourSphereOrigin && nrrd.tumourSphereOrigin[axis][2] === nrrd.currentIndex) {
-      this.drawSphereCore(ctx, nrrd.tumourSphereOrigin[axis][0], nrrd.tumourSphereOrigin[axis][1], radius, SPHERE_COLORS.tumour);
+      this.drawSphereCore(ctx, nrrd.tumourSphereOrigin[axis][0], nrrd.tumourSphereOrigin[axis][1], radius, this.getColorForSphereType('tumour'));
     }
     if (nrrd.skinSphereOrigin && nrrd.skinSphereOrigin[axis][2] === nrrd.currentIndex) {
-      this.drawSphereCore(ctx, nrrd.skinSphereOrigin[axis][0], nrrd.skinSphereOrigin[axis][1], radius, SPHERE_COLORS.skin);
+      this.drawSphereCore(ctx, nrrd.skinSphereOrigin[axis][0], nrrd.skinSphereOrigin[axis][1], radius, this.getColorForSphereType('skin'));
     }
     if (nrrd.ribSphereOrigin && nrrd.ribSphereOrigin[axis][2] === nrrd.currentIndex) {
-      this.drawSphereCore(ctx, nrrd.ribSphereOrigin[axis][0], nrrd.ribSphereOrigin[axis][1], radius, SPHERE_COLORS.ribcage);
+      this.drawSphereCore(ctx, nrrd.ribSphereOrigin[axis][0], nrrd.ribSphereOrigin[axis][1], radius, this.getColorForSphereType('ribcage'));
     }
     if (nrrd.nippleSphereOrigin && nrrd.nippleSphereOrigin[axis][2] === nrrd.currentIndex) {
-      this.drawSphereCore(ctx, nrrd.nippleSphereOrigin[axis][0], nrrd.nippleSphereOrigin[axis][1], radius, SPHERE_COLORS.nipple);
+      this.drawSphereCore(ctx, nrrd.nippleSphereOrigin[axis][0], nrrd.nippleSphereOrigin[axis][1], radius, this.getColorForSphereType('nipple'));
     }
     // NOTE: Does NOT composite to master canvas — the start() render loop
     // draws the sphere canvas directly to drawingCtx for proper layering.
@@ -465,7 +452,7 @@ export class SphereTool extends BaseTool {
    */
   clearSpherePrintStoreImages(): void {
     // No-op: sphere images are stored in sphereMaskVolume, not layer volumes.
-    // The sphereMaskVolume is cleared in NrrdTools.clear() when switching cases.
+    // The sphereMaskVolume is cleared in NrrdTools.reset() when switching cases.
   }
 
   // ===== 3D Sphere Volume Write =====
