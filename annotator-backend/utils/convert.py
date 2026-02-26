@@ -24,14 +24,14 @@ except ImportError:
 # Matches frontend MASK_CHANNEL_COLORS for consistency
 CHANNEL_COLORS = {
     0: [0, 0, 0, 0],           # Transparent (not used in mesh)
-    1: [0, 255, 0, 255],       # Green
-    2: [255, 0, 0, 255],       # Red
-    3: [0, 0, 255, 255],       # Blue
-    4: [255, 255, 0, 255],     # Yellow
-    5: [255, 0, 255, 255],     # Magenta
-    6: [0, 255, 255, 255],     # Cyan
-    7: [255, 165, 0, 255],     # Orange
-    8: [128, 0, 128, 255],     # Purple
+    1: [16, 185, 129, 255],    # Emerald / Soft Green
+    2: [244, 63, 94, 255],     # Rose / Soft Red
+    3: [59, 130, 246, 255],    # Blue
+    4: [251, 191, 36, 255],    # Amber / Soft Yellow
+    5: [217, 70, 239, 255],    # Fuchsia / Magenta
+    6: [6, 182, 212, 255],     # Cyan / Teal
+    7: [249, 115, 22, 255],    # Orange
+    8: [139, 92, 246, 255],    # Violet / Purple
 }
 
 

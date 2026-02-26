@@ -13,6 +13,7 @@ import {
 import { MaskVolume } from "./core/index";
 import { switchPencilIcon } from "../utils";
 import { enableDownload } from "./coreTools/divControlTools";
+import { CHANNEL_HEX_COLORS } from "./core/types";
 
 export class CommToolsData {
   baseCanvasesSize: number = 1;
@@ -68,10 +69,10 @@ export class CommToolsData {
     skinSphereOrigin: null,
     ribSphereOrigin: null,
     nippleSphereOrigin: null,
-    tumourColor: "#00ff00",
-    skinColor: "#ffff00",
-    ribcageColor: "#0000ff",
-    nippleColor: "#ff00ff",
+    tumourColor: CHANNEL_HEX_COLORS[1],
+    skinColor: CHANNEL_HEX_COLORS[4],
+    ribcageColor: CHANNEL_HEX_COLORS[3],
+    nippleColor: CHANNEL_HEX_COLORS[5],
 
     sphereMaskVolume: null,
     sphereRadius: 5,
@@ -132,8 +133,8 @@ export class CommToolsData {
     lineWidth: 2,
     color: "#f50a33",
     pencil: true,
-    fillColor: "#00ff00",
-    brushColor: "#00ff00",
+    fillColor: CHANNEL_HEX_COLORS[1],
+    brushColor: CHANNEL_HEX_COLORS[1],
     brushAndEraserSize: 10,
     cursor: "dot",
     layer: "layer1",
