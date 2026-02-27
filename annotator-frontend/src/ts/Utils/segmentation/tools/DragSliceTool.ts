@@ -127,7 +127,7 @@ export class DragSliceTool extends BaseTool {
         this.drawDragSlice(needToUpdateSlice.canvas);
       }
 
-      nrrd.oldIndex = newIndex * nrrd.RSARatio;
+      nrrd.preSliceIndex = newIndex * nrrd.RSARatio;
       this.updateShowNumDiv(nrrd.contrastNum);
     }
   }

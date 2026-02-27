@@ -906,7 +906,7 @@ export class DrawToolCore extends CommToolsData {
       });
 
       // Notify external that slice was cleared
-      if (!this.nrrd_states.loadMaskJson && !this.gui_states.sphere) {
+      if (!this.nrrd_states.loadingMaskData && !this.gui_states.sphere) {
         const activeChannel = this.gui_states.activeChannel || 1;
         this.nrrd_states.getMask(
           newSlice,
@@ -963,7 +963,7 @@ export class DrawToolCore extends CommToolsData {
       this.applyUndoRedoToCanvas(delta.layerId);
     }
 
-    if (!this.nrrd_states.loadMaskJson) {
+    if (!this.nrrd_states.loadingMaskData) {
       const { data: sliceData, width, height } = this.getVolumeForLayer(delta.layerId)
         .getSliceUint8(delta.sliceIndex, delta.axis);
       this.nrrd_states.getMask(
@@ -997,7 +997,7 @@ export class DrawToolCore extends CommToolsData {
       this.applyUndoRedoToCanvas(delta.layerId);
     }
 
-    if (!this.nrrd_states.loadMaskJson) {
+    if (!this.nrrd_states.loadingMaskData) {
       const { data: sliceData, width, height } = this.getVolumeForLayer(delta.layerId)
         .getSliceUint8(delta.sliceIndex, delta.axis);
       this.nrrd_states.getMask(

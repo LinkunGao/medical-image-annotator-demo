@@ -696,7 +696,7 @@ export class NrrdTools extends DrawToolCore {
     loadingBar?: loadingBarType
   ) {
     if (!!masksData) {
-      this.nrrd_states.loadMaskJson = true;
+      this.nrrd_states.loadingMaskData = true;
       if (loadingBar) {
         let { loadingContainer, progress } = loadingBar;
         loadingContainer.style.display = "flex";
@@ -725,7 +725,7 @@ export class NrrdTools extends DrawToolCore {
         this.syncLayerSliceData(i, "default");
       }
 
-      this.nrrd_states.loadMaskJson = false;
+      this.nrrd_states.loadingMaskData = false;
       this.gui_states.resetZoom();
       if (loadingBar) {
         loadingBar.loadingContainer.style.display = "none";
@@ -864,7 +864,7 @@ export class NrrdTools extends DrawToolCore {
         } else {
           // not cursor select, freedom to switch x -> z or y -> z and z -> x or z -> y
           this.nrrd_states.currentIndex = this.cursorPage.z.index;
-          this.nrrd_states.oldIndex =
+          this.nrrd_states.preSliceIndex =
             this.cursorPage.z.index * this.nrrd_states.ratios.z;
           this.nrrd_states.cursorPageX = this.cursorPage.z.cursorPageX;
           this.nrrd_states.cursorPageY = this.cursorPage.z.cursorPageY;
@@ -896,7 +896,7 @@ export class NrrdTools extends DrawToolCore {
         } else {
           // not cursor select, freedom to switch z -> x or y -> x and x -> z or x -> y
           this.nrrd_states.currentIndex = this.cursorPage.x.index;
-          this.nrrd_states.oldIndex =
+          this.nrrd_states.preSliceIndex =
             this.cursorPage.x.index * this.nrrd_states.ratios.x;
           this.nrrd_states.cursorPageX = this.cursorPage.x.cursorPageX;
           this.nrrd_states.cursorPageY = this.cursorPage.x.cursorPageY;
@@ -926,7 +926,7 @@ export class NrrdTools extends DrawToolCore {
         } else {
           // not cursor select, freedom to switch z -> y or x -> y and y -> z or y -> x
           this.nrrd_states.currentIndex = this.cursorPage.y.index;
-          this.nrrd_states.oldIndex =
+          this.nrrd_states.preSliceIndex =
             this.cursorPage.y.index * this.nrrd_states.ratios.y;
           this.nrrd_states.cursorPageX = this.cursorPage.y.cursorPageX;
           this.nrrd_states.cursorPageY = this.cursorPage.y.cursorPageY;
@@ -935,8 +935,8 @@ export class NrrdTools extends DrawToolCore {
 
       if (convetObj) {
         // update convert cursor point, when cursor select
-        this.nrrd_states.currentIndex = convetObj.currentIndex;
-        this.nrrd_states.oldIndex = convetObj.oldIndex;
+        this.nrrd_states.currentIndex = convetObj.currentNewSliceIndex;
+        this.nrrd_states.preSliceIndex = convetObj.preSliceIndex;
         this.nrrd_states.cursorPageX = convetObj.convertCursorNumX;
         this.nrrd_states.cursorPageY = convetObj.convertCursorNumY;
 
@@ -1204,11 +1204,11 @@ export class NrrdTools extends DrawToolCore {
 
   private setOriginCanvasAndPre() {
     if (this.protectedData.mainPreSlices) {
-      if (this.nrrd_states.oldIndex > this.nrrd_states.maxIndex)
-        this.nrrd_states.oldIndex = this.nrrd_states.maxIndex;
+      if (this.nrrd_states.preSliceIndex > this.nrrd_states.maxIndex)
+        this.nrrd_states.preSliceIndex = this.nrrd_states.maxIndex;
 
       if (this.initState) {
-        this.nrrd_states.oldIndex =
+        this.nrrd_states.preSliceIndex =
           this.protectedData.mainPreSlices.initIndex *
           this.nrrd_states.RSARatio;
         this.nrrd_states.currentIndex =
@@ -1216,7 +1216,7 @@ export class NrrdTools extends DrawToolCore {
       } else {
         // !need to change
         // todo
-        this.protectedData.mainPreSlices.index = this.nrrd_states.oldIndex;
+        this.protectedData.mainPreSlices.index = this.nrrd_states.preSliceIndex;
       }
 
       this.protectedData.canvases.originCanvas =
@@ -1230,7 +1230,7 @@ export class NrrdTools extends DrawToolCore {
     this.setMainPreSlice();
     this.setOriginCanvasAndPre();
     this.protectedData.currentShowingSlice = this.protectedData.mainPreSlices;
-    this.nrrd_states.oldIndex =
+    this.nrrd_states.preSliceIndex =
       this.protectedData.mainPreSlices.initIndex * this.nrrd_states.RSARatio;
     this.nrrd_states.currentIndex = this.protectedData.mainPreSlices.initIndex;
     // Phase 6: Reset undo/redo stacks on new dataset load

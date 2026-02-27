@@ -48,7 +48,7 @@ export class CommToolsData {
     nrrd_z_pixel: 0,
     changedWidth: 0,
     changedHeight: 0,
-    oldIndex: 0,
+    preSliceIndex: 0,
     currentIndex: 0,
     maxIndex: 0,
     minIndex: 0,
@@ -56,7 +56,7 @@ export class CommToolsData {
     voxelSpacing: [],
     spaceOrigin: [],
     dimensions: [],
-    loadMaskJson: false,
+    loadingMaskData: false,
     ratios: { x: 1, y: 1, z: 1 },
     contrastNum: 0,
 

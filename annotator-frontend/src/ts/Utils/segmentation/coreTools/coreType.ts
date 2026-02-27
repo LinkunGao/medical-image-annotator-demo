@@ -20,8 +20,8 @@ interface IDownloadImageConfig {
 }
 
 interface IConvertObjType {
-  currentIndex: number;
-  oldIndex: number;
+  currentNewSliceIndex: number;
+  preSliceIndex: number;
   convertCursorNumX: number;
   convertCursorNumY: number;
 }
@@ -195,7 +195,7 @@ interface INrrdStates {
   nrrd_z_pixel: number;
   changedWidth: number;
   changedHeight: number;
-  oldIndex: number;
+  preSliceIndex: number;
   currentIndex: number;
   maxIndex: number;
   minIndex: number;
@@ -203,7 +203,7 @@ interface INrrdStates {
   voxelSpacing: number[];
   spaceOrigin: number[];
   dimensions: number[];
-  loadMaskJson: boolean;
+  loadingMaskData: boolean;
   ratios: ICommXYZ;
   contrastNum: number;
   showContrast: boolean;
