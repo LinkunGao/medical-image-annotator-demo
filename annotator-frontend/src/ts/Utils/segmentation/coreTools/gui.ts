@@ -42,6 +42,10 @@ interface IConfigGUI {
   drawImageOnEmptyImage: (canvas: HTMLCanvasElement) => void;
   getRestLayer: () => string[];
   setIsDrawFalse: (target: number) => void;
+  undoLastPainting: () => void;
+  redoLastPainting: () => void;
+  resetZoom: () => void;
+  downloadCurrentMask: () => void;
 }
 
 function setupGui(configs: IConfigGUI): IGuiParameterSettings {
@@ -81,11 +85,28 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
   actionsFolder.add(configs.gui_states, "Eraser").onChange((value) => {
     updateGuiEraserState();
   });
-  actionsFolder.add(configs.gui_states, "clear").name("Clear");
-  actionsFolder.add(configs.gui_states, "clearAll").name("ClearAll");
-  actionsFolder.add(configs.gui_states, "undo").name("Undo");
-  actionsFolder.add(configs.gui_states, "redo").name("Redo");
-  actionsFolder.add(configs.gui_states, "resetZoom").name("ResetZoom");
+  // Phase 2: Actions are no longer on gui_states — use a local actions object for dat.gui
+  const actions = {
+    clear: () => configs.clearActiveSlice(),
+    clearAll: () => {
+      const text = "Are you sure remove annotations on All slice?";
+      if (confirm(text) === true) {
+        configs.nrrd_states.clearAllFlag = true;
+        configs.clearActiveSlice();
+        configs.clearActiveLayer();
+      }
+      configs.nrrd_states.clearAllFlag = false;
+    },
+    undo: () => configs.undoLastPainting(),
+    redo: () => configs.redoLastPainting(),
+    resetZoom: () => configs.resetZoom(),
+    downloadCurrentMask: () => configs.downloadCurrentMask(),
+  };
+  actionsFolder.add(actions, "clear").name("Clear");
+  actionsFolder.add(actions, "clearAll").name("ClearAll");
+  actionsFolder.add(actions, "undo").name("Undo");
+  actionsFolder.add(actions, "redo").name("Redo");
+  actionsFolder.add(actions, "resetZoom").name("ResetZoom");
 
   actionsFolder
     .add(
@@ -170,7 +191,7 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
   bushFolder.addColor(configs.gui_states, "brushColor").name("BrushColor");
   const maskFolder = advanceFolder.addFolder("MaskDownload");
   maskFolder
-    .add(configs.gui_states, "downloadCurrentMask")
+    .add(actions, "downloadCurrentMask")
     .name("DownloadCurrentMask");
 
   const contrastFolder = advanceFolder.addFolder("ContrastAdvanceSettings");

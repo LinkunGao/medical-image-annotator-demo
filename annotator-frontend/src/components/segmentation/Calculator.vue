@@ -49,13 +49,7 @@
 /**
  * Calculator Component
  *
- * @description Distance calculation panel for measuring tumour distances to:
- * - Skin surface
- * - Nipple position
- * - Ribcage
- *
- * Provides radio buttons to select measurement target and reports timing
- * for clinical trial purposes.
+ * Phase 1 Refactored: All guiSettings access replaced with NrrdTools typed API.
  *
  * @listens Segementation:CaseSwitched - Resets calculator on case change
  * @listens Segmentation:FinishLoadAllCaseImages - Enables controls after loading
@@ -65,45 +59,24 @@
  */
 import { ref, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
-import * as Copper from "@/ts/index";
-// import * as Copper from "copper3d";
+import type { NrrdTools } from "@/ts/index";
 
-/** Currently selected measurement target (tumour, skin, nipple, ribcage) */
 const calculatorPickerRadios = ref("tumour");
-
-/** Whether calculator radios are disabled */
 const calculatorPickerRadiosDisabled = ref(true);
 
-/**
- * Radio button configuration for measurement targets.
- * Note: Tumour option is commented out as it's the default starting point.
- */
 const commFuncRadioValues = ref([
-  // { label: "Tumour", value: "tumour", color: "#4CAF50" },
   { label: "Skin", value: "skin", color: "#FFEB3B" },
   { label: "Nipple", value: "nipple", color: "#E91E63" },
   { label: "Ribcage", value: "ribcage", color: "#2196F3" },
 ]);
 
-/** GUI settings reference from NrrdTools */
-const guiSettings = ref<any>();
+let nrrdTools: NrrdTools;
 
-/** Timer start time for clinical trial tracking */
-const startTime = ref<number[]>([0,0,0]);
-
-/** Time when skin measurement was taken */
+const startTime = ref<number[]>([0, 0, 0]);
 const skinTime = ref<string>();
-
-/** Time when nipple measurement was taken */
 const nippleTime = ref<string>();
-
-/** Time when ribcage measurement was taken */
 const ribTime = ref<string>();
-
-/** Time when measurement was finished */
 const finishTime = ref<string>();
-  
-
 
 onMounted(() => {
   manageEmitters();
@@ -115,89 +88,76 @@ function manageEmitters() {
   emitter.on("Common:OpenCalculatorBox", emitterOnOpenCalculatorBox);
   emitter.on("Common:CloseCalculatorBox", emitterOnCloseCalculatorBox);
   emitter.on("SegmentationTrial:CalulatorTimerFunction", emitterOnCalulatorTimerFunction);
+  emitter.on("Core:NrrdTools", emitterOnNrrdTools);
 }
 
-const emitterOnCaseSwitched = ()=>{
-  if (!!guiSettings.value && guiSettings.value.guiState["calculator"]) onBtnClick("load case");
+const emitterOnNrrdTools = (tool: NrrdTools) => {
+  nrrdTools = tool;
+}
+
+const emitterOnCaseSwitched = () => {
+  if (nrrdTools?.isCalculatorActive()) onBtnClick("load case");
   emitter.emit("Common:CloseCalculatorBox", "Calculator");
 }
-const emitterOnFinishLoadAllCaseImages = (val:
-  {
-    guiState: Copper.IGUIStates;
-    guiSetting: Copper.IGuiParameterSettings;
-  }
-) => {
-  guiSettings.value = val;
+
+const emitterOnFinishLoadAllCaseImages = () => {
   calculatorPickerRadios.value = "tumour";
-  if(!!guiSettings.value && guiSettings.value.guiState["calculator"]) calculatorPickerRadiosDisabled.value = false;
+  if (nrrdTools?.isCalculatorActive()) calculatorPickerRadiosDisabled.value = false;
 }
-const emitterOnOpenCalculatorBox = ()=>{
-  calculatorPickerRadiosDisabled.value = false;      
+
+const emitterOnOpenCalculatorBox = () => {
+  calculatorPickerRadiosDisabled.value = false;
 }
-const emitterOnCloseCalculatorBox = ()=>{
+
+const emitterOnCloseCalculatorBox = () => {
   calculatorPickerRadiosDisabled.value = true;
-  onBtnClick("close calculate")
+  onBtnClick("close calculate");
 }
-const emitterOnCalulatorTimerFunction = (status: string)=>{
+
+const emitterOnCalulatorTimerFunction = (status: string) => {
   calculatorTimerReport(status);
 }
 
-function calculatorTimerReport(status:string){
-
+function calculatorTimerReport(status: string) {
   const now = new Date();
-  const currentTime = [now.getHours(), now.getMinutes(), now.getSeconds()]
+  const currentTime = [now.getHours(), now.getMinutes(), now.getSeconds()];
   switch (status) {
-      case "start":
-        console.log("start timer: ", now.getHours()+":", now.getMinutes()+":", now.getSeconds());
-        startTime.value = currentTime;
-        nippleTime.value = "";
-        skinTime.value = "";
-        ribTime.value = "";
-        finishTime.value = "";
-        break;
-      case "skin":
-        console.log("skin timer: ", now.getHours()+":", now.getMinutes()+":", now.getSeconds());
-        break;
-      case "nipple":
-        console.log("nipple timer: ", now.getHours()+":", now.getMinutes()+":", now.getSeconds());
-        break;
-      case "ribcage":
-        console.log("ribcage timer: ", now.getHours()+":", now.getMinutes()+":", now.getSeconds());
-        break;
-      case "finish":
-        console.log("finish timer: ", now.getHours()+":", now.getMinutes()+":", now.getSeconds());
-        break;
-    
-      default:
-        break;
-    }
+    case "start":
+      console.log("start timer: ", now.getHours() + ":", now.getMinutes() + ":", now.getSeconds());
+      startTime.value = currentTime;
+      nippleTime.value = "";
+      skinTime.value = "";
+      ribTime.value = "";
+      finishTime.value = "";
+      break;
+    case "skin":
+      console.log("skin timer: ", now.getHours() + ":", now.getMinutes() + ":", now.getSeconds());
+      break;
+    case "nipple":
+      console.log("nipple timer: ", now.getHours() + ":", now.getMinutes() + ":", now.getSeconds());
+      break;
+    case "ribcage":
+      console.log("ribcage timer: ", now.getHours() + ":", now.getMinutes() + ":", now.getSeconds());
+      break;
+    case "finish":
+      console.log("finish timer: ", now.getHours() + ":", now.getMinutes() + ":", now.getSeconds());
+      break;
+    default:
+      break;
+  }
 }
 
 function toggleCalculatorPickerRadios(val: string | null) {
-  if (val === "skin"){
-    // "tumour" | "skin" | "nipple" | "ribcage"
-    guiSettings.value.guiState["activeSphereType"] = "skin";
-  }
-  if (val === "nipple"){
-    guiSettings.value.guiState["activeSphereType"] = "nipple";
-  }
-  if (val === "ribcage"){
-    guiSettings.value.guiState["activeSphereType"] = "ribcage";
-  }
-
-  guiSettings.value.guiSetting["activeSphereType"].onChange(calculatorPickerRadios.value);
-
+  if (!nrrdTools || !val) return;
+  nrrdTools.setActiveSphereType(val as any);
 }
 
-function onBtnClick(val:string){
-  if (!!guiSettings.value){
-    calculatorPickerRadios.value = "tumour";
-    guiSettings.value.guiState["activeSphereType"] = "tumour";
-    calculatorPickerRadiosDisabled.value = true;
-
-    calculatorTimerReport("finish")
-
-  }
+function onBtnClick(val: string) {
+  if (!nrrdTools) return;
+  calculatorPickerRadios.value = "tumour";
+  nrrdTools.setActiveSphereType("tumour");
+  calculatorPickerRadiosDisabled.value = true;
+  calculatorTimerReport("finish");
 }
 
 onUnmounted(() => {
@@ -206,7 +166,8 @@ onUnmounted(() => {
   emitter.off("Common:OpenCalculatorBox", emitterOnOpenCalculatorBox);
   emitter.off("Common:CloseCalculatorBox", emitterOnCloseCalculatorBox);
   emitter.off("SegmentationTrial:CalulatorTimerFunction", emitterOnCalulatorTimerFunction);
-})
+  emitter.off("Core:NrrdTools", emitterOnNrrdTools);
+});
 
 </script>
 

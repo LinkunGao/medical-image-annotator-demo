@@ -85,6 +85,7 @@ export class DrawToolCore extends CommToolsData {
       gui_states: this.gui_states,
       protectedData: this.protectedData,
       cursorPage: this.cursorPage,
+      callbacks: this.annotationCallbacks,
     };
 
     this.imageStoreHelper = new ImageStoreHelper(toolCtx, {
@@ -269,12 +270,19 @@ export class DrawToolCore extends CommToolsData {
 
   draw(opts?: IDrawOpts) {
     if (!!opts) {
-      this.nrrd_states.getMask = opts?.getMaskData as any;
-      if (opts?.onClearLayerVolume) {
-        this.nrrd_states.onClearLayerVolume = opts.onClearLayerVolume as any;
+      // Phase 2: Store callbacks in annotationCallbacks instead of nrrd_states
+      if (opts.getMaskData) {
+        this.annotationCallbacks.onMaskChanged = opts.getMaskData as any;
       }
-      this.nrrd_states.getSphere = opts?.getSphereData as any;
-      this.nrrd_states.getCalculateSpherePositions = opts?.getCalculateSpherePositionsData as any;
+      if (opts.onClearLayerVolume) {
+        this.annotationCallbacks.onLayerVolumeCleared = opts.onClearLayerVolume as any;
+      }
+      if (opts.getSphereData) {
+        this.annotationCallbacks.onSphereChanged = opts.getSphereData as any;
+      }
+      if (opts.getCalculateSpherePositionsData) {
+        this.annotationCallbacks.onCalculatorPositionsChanged = opts.getCalculateSpherePositionsData as any;
+      }
     }
     this.paintOnCanvas();
   }
@@ -468,20 +476,18 @@ export class DrawToolCore extends CommToolsData {
           // Render current slice from volume to sphere canvas
           this.sphereTool.refreshSphereCanvas();
 
-          !!this.nrrd_states.getSphere &&
-            this.nrrd_states.getSphere(
-              this.nrrd_states.sphereOrigin.z,
-              this.nrrd_states.sphereRadius / this.nrrd_states.sizeFoctor
-            );
+          this.annotationCallbacks.onSphereChanged(
+            this.nrrd_states.sphereOrigin.z,
+            this.nrrd_states.sphereRadius / this.nrrd_states.sizeFoctor
+          );
 
-          !!this.nrrd_states.getCalculateSpherePositions &&
-            this.nrrd_states.getCalculateSpherePositions(
-              this.nrrd_states.tumourSphereOrigin,
-              this.nrrd_states.skinSphereOrigin,
-              this.nrrd_states.ribSphereOrigin,
-              this.nrrd_states.nippleSphereOrigin,
-              this.protectedData.axis
-            );
+          this.annotationCallbacks.onCalculatorPositionsChanged(
+            this.nrrd_states.tumourSphereOrigin,
+            this.nrrd_states.skinSphereOrigin,
+            this.nrrd_states.ribSphereOrigin,
+            this.nrrd_states.nippleSphereOrigin,
+            this.protectedData.axis
+          );
 
           this.protectedData.canvases.drawingCanvas.removeEventListener(
             "wheel",
@@ -908,7 +914,7 @@ export class DrawToolCore extends CommToolsData {
       // Notify external that slice was cleared
       if (!this.nrrd_states.loadingMaskData && !this.gui_states.sphere) {
         const activeChannel = this.gui_states.activeChannel || 1;
-        this.nrrd_states.getMask(
+        this.annotationCallbacks.onMaskChanged(
           newSlice,
           activeLayer,
           activeChannel,
@@ -966,7 +972,7 @@ export class DrawToolCore extends CommToolsData {
     if (!this.nrrd_states.loadingMaskData) {
       const { data: sliceData, width, height } = this.getVolumeForLayer(delta.layerId)
         .getSliceUint8(delta.sliceIndex, delta.axis);
-      this.nrrd_states.getMask(
+      this.annotationCallbacks.onMaskChanged(
         sliceData, delta.layerId, this.gui_states.activeChannel || 1,
         delta.sliceIndex, delta.axis, width, height, false
       );
@@ -1000,7 +1006,7 @@ export class DrawToolCore extends CommToolsData {
     if (!this.nrrd_states.loadingMaskData) {
       const { data: sliceData, width, height } = this.getVolumeForLayer(delta.layerId)
         .getSliceUint8(delta.sliceIndex, delta.axis);
-      this.nrrd_states.getMask(
+      this.annotationCallbacks.onMaskChanged(
         sliceData, delta.layerId, this.gui_states.activeChannel || 1,
         delta.sliceIndex, delta.axis, width, height, false
       );

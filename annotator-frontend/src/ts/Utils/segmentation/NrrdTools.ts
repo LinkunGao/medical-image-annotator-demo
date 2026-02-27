@@ -7,7 +7,7 @@ import {
 import { GUI } from "dat.gui";
 import { setupGui } from "./coreTools/gui";
 
-import { autoFocusDiv } from "./coreTools/divControlTools";
+import { autoFocusDiv, enableDownload } from "./coreTools/divControlTools";
 import {
   IPaintImage,
   IPaintImages,
@@ -15,7 +15,10 @@ import {
   IMaskData,
   IDragOpts,
   IGuiParameterSettings,
-  IKeyBoardSettings
+  IKeyBoardSettings,
+  ToolMode,
+  IGuiMeta,
+  IDownloadImageConfig,
 } from "./coreTools/coreType";
 import { DragOperator } from "./DragOperator";
 import { DrawToolCore } from "./DrawToolCore";
@@ -48,6 +51,21 @@ export class NrrdTools extends DrawToolCore {
   private guiParameterSettings: IGuiParameterSettings | undefined;
   private _sliceRAFId: number | null = null;
   private _pendingSliceStep: number = 0;
+
+  /** Whether calculator mode is active (not part of gui_states interface) */
+  private _calculatorActive: boolean = false;
+
+  /** Stored closure callbacks from gui.ts setupGui() */
+  private guiCallbacks: {
+    updatePencilState: () => void;
+    updateEraserState: () => void;
+    updateBrushAndEraserSize: () => void;
+    updateSphereState: () => void;
+    updateCalDistance: (val: "tumour" | "skin" | "ribcage" | "nipple") => void;
+    updateWindowHigh: (value: number) => void;
+    updateWindowLow: (value: number) => void;
+    finishContrastAdjustment: () => void;
+  } | null = null;
 
   constructor(container: HTMLDivElement, options?: { layers?: string[] }) {
     super(container, options);
@@ -148,8 +166,24 @@ export class NrrdTools extends DrawToolCore {
       getRestLayer: this.getRestLayer,
       setIsDrawFalse: this.setIsDrawFalse,
       getVolumeForLayer: this.getVolumeForLayer.bind(this),
+      undoLastPainting: this.undoLastPainting.bind(this),
+      redoLastPainting: this.redoLastPainting.bind(this),
+      resetZoom: () => this.executeAction("resetZoom"),
+      downloadCurrentMask: () => this.executeAction("downloadCurrentMask"),
     };
     this.guiParameterSettings = setupGui(guiOptions);
+
+    // Store closure callbacks for programmatic access (Phase 1 Task 1.2)
+    this.guiCallbacks = {
+      updatePencilState: this.guiParameterSettings.pencil.onChange,
+      updateEraserState: this.guiParameterSettings.Eraser.onChange,
+      updateBrushAndEraserSize: this.guiParameterSettings.brushAndEraserSize.onChange,
+      updateSphereState: this.guiParameterSettings.sphere.onChange,
+      updateCalDistance: this.guiParameterSettings.activeSphereType.onChange,
+      updateWindowHigh: this.guiParameterSettings.windowHigh.onChange,
+      updateWindowLow: this.guiParameterSettings.windowLow.onChange,
+      finishContrastAdjustment: this.guiParameterSettings.windowHigh.onFinished,
+    };
   }
 
   getGuiSettings() {
@@ -195,6 +229,265 @@ export class NrrdTools extends DrawToolCore {
    */
   setActiveSphereType(type: SphereType): void {
     this.gui_states.activeSphereType = type;
+    // Apply color side-effect: update fillColor/brushColor from sphere channel map
+    const mapping = SPHERE_CHANNEL_MAP[type];
+    if (mapping) {
+      const volume = this.getVolumeForLayer(mapping.layer);
+      const color = volume
+        ? rgbaToHex(volume.getChannelColor(mapping.channel))
+        : (CHANNEL_HEX_COLORS[mapping.channel] || '#00ff00');
+      this.gui_states.fillColor = color;
+      this.gui_states.brushColor = color;
+    }
+  }
+
+  // ── Phase 1: GUI API — Mode Management ──────────────────────────────────
+
+  /**
+   * Set the current tool mode. Handles deactivation of the previous mode
+   * and activation of the new mode, including all gui.ts side-effects.
+   *
+   * Replaces direct mutation of `guiSettings.value.guiState["pencil"]` etc.
+   * from Vue components.
+   */
+  setMode(mode: ToolMode): void {
+    if (!this.guiCallbacks) return;
+
+    const prevSphere = this.gui_states.sphere;
+    const prevCalculator = this._calculatorActive;
+
+    // Reset all mode flags
+    this.gui_states.pencil = false;
+    this.gui_states.Eraser = false;
+    this.gui_states.sphere = false;
+    this._calculatorActive = false;
+
+    // Activate new mode
+    switch (mode) {
+      case "pencil":
+        this.gui_states.pencil = true;
+        this.guiCallbacks.updatePencilState();
+        break;
+      case "brush":
+        // brush = pencil off + eraser off (default brush mode)
+        this.guiCallbacks.updatePencilState();
+        break;
+      case "eraser":
+        this.gui_states.Eraser = true;
+        this.guiCallbacks.updateEraserState();
+        break;
+      case "sphere":
+        this.gui_states.sphere = true;
+        break;
+      case "calculator":
+        this.gui_states.sphere = true;
+        this._calculatorActive = true;
+        break;
+    }
+
+    // Handle sphere mode transitions
+    if (prevSphere && !this.gui_states.sphere) {
+      this.guiCallbacks.updateSphereState(); // exits sphere mode
+    }
+    if (!prevSphere && this.gui_states.sphere) {
+      this.guiCallbacks.updateSphereState(); // enters sphere mode
+    }
+
+    // Handle calculator exit side-effect
+    if (prevCalculator && !this._calculatorActive) {
+      // calculator was exited — sphere onChange already handled above
+    }
+  }
+
+  /**
+   * Get the current tool mode based on gui_states flags.
+   */
+  getMode(): ToolMode {
+    if (this._calculatorActive) return "calculator";
+    if (this.gui_states.sphere) return "sphere";
+    if (this.gui_states.Eraser) return "eraser";
+    if (this.gui_states.pencil) return "pencil";
+    return "brush";
+  }
+
+  /**
+   * Check if calculator mode is active.
+   */
+  isCalculatorActive(): boolean {
+    return this._calculatorActive;
+  }
+
+  // ── Phase 1: GUI API — Slider Methods ───────────────────────────────────
+
+  /**
+   * Set mask overlay opacity.
+   * @param value Opacity value [0.1, 1]
+   */
+  setOpacity(value: number): void {
+    this.gui_states.globalAlpha = Math.max(0.1, Math.min(1, value));
+  }
+
+  /**
+   * Get the current mask overlay opacity.
+   */
+  getOpacity(): number {
+    return this.gui_states.globalAlpha;
+  }
+
+  /**
+   * Set brush and eraser size, and trigger cursor update.
+   * @param size Brush size [5, 50]
+   */
+  setBrushSize(size: number): void {
+    this.gui_states.brushAndEraserSize = Math.max(5, Math.min(50, size));
+    this.guiCallbacks?.updateBrushAndEraserSize();
+  }
+
+  /**
+   * Get the current brush/eraser size.
+   */
+  getBrushSize(): number {
+    return this.gui_states.brushAndEraserSize;
+  }
+
+  /**
+   * Set window high (image contrast) value.
+   * Call finishWindowAdjustment() when the user finishes dragging.
+   */
+  setWindowHigh(value: number): void {
+    this.gui_states.readyToUpdate = false;
+    this.guiCallbacks?.updateWindowHigh(value);
+  }
+
+  /**
+   * Set window low (image center) value.
+   * Call finishWindowAdjustment() when the user finishes dragging.
+   */
+  setWindowLow(value: number): void {
+    this.gui_states.readyToUpdate = false;
+    this.guiCallbacks?.updateWindowLow(value);
+  }
+
+  /**
+   * Finish a window/contrast adjustment (repaint all contrast slices).
+   */
+  finishWindowAdjustment(): void {
+    this.guiCallbacks?.finishContrastAdjustment();
+  }
+
+  /**
+   * Adjust contrast by delta, used for drag-based contrast adjustment.
+   * @param type "windowHigh" or "windowLow"
+   * @param delta Delta amount to adjust
+   */
+  adjustContrast(type: "windowHigh" | "windowLow", delta: number): void {
+    if (!this.guiParameterSettings) return;
+    const setting = this.guiParameterSettings[type];
+    // setting.value is the volume object at runtime (typed as null in interface)
+    const vol = setting.value as any;
+    const currentValue = type === "windowHigh"
+      ? (vol?.windowHigh ?? 0)
+      : (vol?.windowLow ?? 0);
+    const newValue = currentValue + delta;
+    if (newValue >= setting.max || newValue <= 0) return;
+
+    if (type === "windowHigh") {
+      this.setWindowHigh(newValue);
+    } else {
+      this.setWindowLow(newValue);
+    }
+  }
+
+  /**
+   * Get slider metadata for UI configuration.
+   * @param key Slider key: "globalAlpha", "brushAndEraserSize", "windowHigh", "windowLow"
+   * @returns IGuiMeta with min, max, step, and current value
+   */
+  getSliderMeta(key: string): IGuiMeta | null {
+    if (!this.guiParameterSettings) return null;
+    const setting = (this.guiParameterSettings as any)[key];
+    if (!setting) return null;
+
+    let value: number;
+    if (key === "windowHigh") {
+      value = setting.value?.windowHigh ?? 0;
+    } else if (key === "windowLow") {
+      value = setting.value?.windowLow ?? 0;
+    } else {
+      value = (this.gui_states as any)[key] ?? 0;
+    }
+
+    return {
+      min: setting.min ?? 0,
+      max: setting.max ?? 100,
+      step: setting.step ?? 1,
+      value,
+    };
+  }
+
+  // ── Phase 1: GUI API — Color & Action Methods ──────────────────────────
+
+  /**
+   * Set the pencil stroke color.
+   */
+  setPencilColor(hex: string): void {
+    this.gui_states.color = hex;
+  }
+
+  /**
+   * Get the current pencil stroke color.
+   */
+  getPencilColor(): string {
+    return this.gui_states.color;
+  }
+
+  /**
+   * Execute a named UI action.
+   * @param action Action name
+   *
+   * Renamed from original gui_states methods:
+   * - "clearActiveSliceMask" (was "clear") — clear annotations on current slice
+   * - "clearActiveLayerMask" (was "clearAll") — clear annotations on all slices for active layer
+   */
+  executeAction(action: "undo" | "redo" | "clearActiveSliceMask" | "clearActiveLayerMask" | "resetZoom" | "downloadCurrentMask"): void {
+    switch (action) {
+      case "undo":
+        this.undo();
+        break;
+      case "redo":
+        this.redo();
+        break;
+      case "clearActiveSliceMask":
+        this.clearActiveSlice();
+        break;
+      case "clearActiveLayerMask": {
+        const text = "Are you sure remove annotations on All slice?";
+        if (confirm(text) === true) {
+          this.nrrd_states.clearAllFlag = true;
+          this.clearActiveSlice();
+          this.clearActiveLayer();
+        }
+        this.nrrd_states.clearAllFlag = false;
+        break;
+      }
+      case "resetZoom":
+        this.nrrd_states.sizeFoctor = this.baseCanvasesSize;
+        this.gui_states.mainAreaSize = this.baseCanvasesSize;
+        this.resizePaintArea(this.nrrd_states.sizeFoctor);
+        this.resetPaintAreaUIPosition();
+        break;
+      case "downloadCurrentMask": {
+        const config: IDownloadImageConfig = {
+          axis: this.protectedData.axis,
+          currentSliceIndex: this.nrrd_states.currentSliceIndex,
+          drawingCanvas: this.protectedData.canvases.drawingCanvas,
+          originWidth: this.nrrd_states.originWidth,
+          originHeight: this.nrrd_states.originHeight,
+        };
+        enableDownload(config);
+        break;
+      }
+    }
   }
 
   /**
@@ -331,7 +624,7 @@ export class NrrdTools extends DrawToolCore {
       this.syncBrushColor();
     }
     this.reloadMasksFromVolume();
-    this.nrrd_states.onChannelColorChanged(layerId, channel, color);
+    this.annotationCallbacks.onChannelColorChanged(layerId, channel, color);
   }
 
   /**
@@ -726,7 +1019,7 @@ export class NrrdTools extends DrawToolCore {
       }
 
       this.nrrd_states.loadingMaskData = false;
-      this.gui_states.resetZoom();
+      this.executeAction("resetZoom");
       if (loadingBar) {
         loadingBar.loadingContainer.style.display = "none";
       }
@@ -774,7 +1067,7 @@ export class NrrdTools extends DrawToolCore {
 
       // Reload the current slice from MaskVolume to canvas
       this.reloadMasksFromVolume();
-      this.gui_states.resetZoom();
+      this.executeAction("resetZoom");
 
     } catch (error) {
       console.error("Error loading NIfTI masks:", error);
@@ -1301,7 +1594,7 @@ export class NrrdTools extends DrawToolCore {
       this.undoManager.clearLayer(activeLayer);
 
       // Phase 3 Task 3.2: Notify external that this layer's volume was cleared
-      this.nrrd_states.onClearLayerVolume(activeLayer);
+      this.annotationCallbacks.onLayerVolumeCleared(activeLayer);
     }
 
     // Invalidate reusable slice buffer

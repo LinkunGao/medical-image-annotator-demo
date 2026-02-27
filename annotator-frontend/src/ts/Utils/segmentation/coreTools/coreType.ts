@@ -1,3 +1,23 @@
+/** Tool mode types for segmentation tools */
+type ToolMode = "pencil" | "brush" | "eraser" | "sphere" | "calculator";
+
+/** Metadata for a GUI slider/control — used by Vue components to configure slider UI */
+interface IGuiMeta {
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+}
+
+/** Callbacks for external notification of annotation data changes */
+interface IAnnotationCallbacks {
+  onMaskChanged(sliceData: Uint8Array, layerId: string, channelId: number, sliceIndex: number, axis: "x" | "y" | "z", width: number, height: number, clearFlag: boolean): void;
+  onSphereChanged(sphereOrigin: number[], sphereRadius: number): void;
+  onCalculatorPositionsChanged(tumour: ICommXYZ | null, skin: ICommXYZ | null, rib: ICommXYZ | null, nipple: ICommXYZ | null, axis: "x" | "y" | "z"): void;
+  onLayerVolumeCleared(layerId: string): void;
+  onChannelColorChanged(layerId: string, channel: number, color: { r: number; g: number; b: number; a: number }): void;
+}
+
 interface ICommXYZ {
   x: any;
   y: any;
@@ -157,14 +177,6 @@ interface IGUIStates {
   readyToUpdate: boolean;
   defaultPaintCursor: string;
   max_sensitive: number;
-  clear: () => void;
-  clearAll: () => void;
-  undo: () => void;
-  redo: () => void;
-  downloadCurrentMask: () => void;
-  resetZoom: () => void;
-  // resetView: () => void;
-  // exportMarks: () => void;
 
   /** Currently active channel (1-8). Channel 0 is transparent/erased. */
   activeChannel: number;
@@ -235,20 +247,6 @@ interface INrrdStates {
   switchSliceFlag: boolean;
   layers: string[];
 
-  getMask: (
-    sliceData: Uint8Array,
-    layerId: string,
-    channelId: number,
-    sliceIndex: number,
-    axis: "x" | "y" | "z",
-    width: number,
-    height: number,
-    clearFlag: boolean
-  ) => void;
-  onClearLayerVolume: (layerId: string) => void;
-  onChannelColorChanged: (layerId: string, channel: number, color: { r: number; g: number; b: number; a: number }) => void;
-  getSphere: (sphereOrigin: number[], sphereRadius: number) => void;
-  getCalculateSpherePositions: (tumourSphereOrigin: ICommXYZ | null, skinSphereOrigin: ICommXYZ | null, ribSphereOrigin: ICommXYZ | null, nippleSphereOrigin: ICommXYZ | null, aixs: "x" | "y" | "z") => void,
   drawStartPos: ICommXY;
 }
 
@@ -401,6 +399,9 @@ interface IGuiParameterSettings {
 };
 
 export {
+  ToolMode,
+  IGuiMeta,
+  IAnnotationCallbacks,
   ICommXYZ,
   ICommXY,
   IDownloadImageConfig,

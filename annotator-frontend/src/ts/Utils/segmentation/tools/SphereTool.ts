@@ -96,8 +96,8 @@ export const SPHERE_LABELS: Record<SphereType | 'default', number> = {
  * These are internal canvas manipulation callbacks, NOT external data callbacks.
  *
  * External data output uses:
- * - nrrd_states.getSphere(origin, radius) — sphere mode
- * - nrrd_states.getCalculateSpherePositions(...) — calculator mode
+ * - annotationCallbacks.onSphereChanged(origin, radius) — sphere mode
+ * - annotationCallbacks.onCalculatorPositionsChanged(...) — calculator mode
  */
 export interface SphereCallbacks {
   setEmptyCanvasSize: (axis?: "x" | "y" | "z") => void;

@@ -138,7 +138,7 @@ export class ImageStoreHelper extends BaseTool {
           const sliceIndex = this.ctx.nrrd_states.currentSliceIndex;
           const { data: sliceData, width, height } = volume.getSliceUint8(sliceIndex, axis);
           const activeChannel = this.ctx.gui_states.activeChannel || 1;
-          this.ctx.nrrd_states.getMask(
+          this.ctx.callbacks.onMaskChanged(
             sliceData,
             layer,
             activeChannel,

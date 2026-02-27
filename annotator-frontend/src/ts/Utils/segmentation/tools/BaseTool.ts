@@ -15,6 +15,7 @@ import type {
   ICursorPage,
   IPaintImage,
   IPaintImages,
+  IAnnotationCallbacks,
 } from "../coreTools/coreType";
 import type { EventRouter } from "../eventRouter/EventRouter";
 
@@ -27,6 +28,8 @@ export interface ToolContext {
   gui_states: IGUIStates;
   protectedData: IProtected;
   cursorPage: ICursorPage;
+  /** External annotation callbacks (Phase 2) */
+  callbacks: IAnnotationCallbacks;
   /** EventRouter reference for mode/state queries. Set after initDrawToolCore(). */
   eventRouter?: EventRouter;
 }

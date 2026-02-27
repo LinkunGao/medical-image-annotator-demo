@@ -1,18 +1,16 @@
 import {
-  IDownloadImageConfig,
   IProtected,
   IGUIStates,
   INrrdStates,
   ICursorPage,
   IConvertObjType,
-  ICommXYZ,
   INewMaskData,
   ILayerRenderTarget,
-  IKeyBoardSettings
+  IKeyBoardSettings,
+  IAnnotationCallbacks
 } from "./coreTools/coreType";
 import { MaskVolume } from "./core/index";
 import { switchPencilIcon } from "../utils";
-import { enableDownload } from "./coreTools/divControlTools";
 import { CHANNEL_HEX_COLORS } from "./core/types";
 
 export class CommToolsData {
@@ -22,6 +20,15 @@ export class CommToolsData {
   private _reusableSliceBuffer: ImageData | null = null;
   private _reusableBufferWidth: number = 0;
   private _reusableBufferHeight: number = 0;
+
+  /** External annotation callbacks — set via draw() options */
+  protected annotationCallbacks: IAnnotationCallbacks = {
+    onMaskChanged: () => { },
+    onSphereChanged: () => { },
+    onCalculatorPositionsChanged: () => { },
+    onLayerVolumeCleared: () => { },
+    onChannelColorChanged: () => { },
+  };
 
   /** Whether the keyboard-config dialog is open (suppresses all shortcuts). */
   protected _configKeyBoard: boolean = false;
@@ -83,20 +90,6 @@ export class CommToolsData {
     switchSliceFlag: false,
     layers: ["layer1", "layer2", "layer3"],
 
-    getMask: (
-      sliceData: Uint8Array,
-      layerId: string,
-      channelId: number,
-      sliceIndex: number,
-      axis: "x" | "y" | "z",
-      width: number,
-      height: number,
-      clearFlag: boolean
-    ) => { },
-    onClearLayerVolume: (layerId: string) => { },
-    onChannelColorChanged: () => { },
-    getSphere: (sphereOrigin: number[], sphereRadius: number) => { },
-    getCalculateSpherePositions: (tumourSphereOrigin: ICommXYZ | null, skinSphereOrigin: ICommXYZ | null, ribSphereOrigin: ICommXYZ | null, nippleSphereOrigin: ICommXYZ | null, aixs: "x" | "y" | "z") => { },
     drawStartPos: { x: 1, y: 1 },
   };
 
@@ -139,41 +132,6 @@ export class CommToolsData {
     readyToUpdate: true,
     defaultPaintCursor: switchPencilIcon("dot"),
     max_sensitive: 100,
-    // EraserSize: 25,
-    clear: () => {
-      this.clearActiveSlice();
-    },
-    clearAll: () => {
-      const text = "Are you sure remove annotations on All slice?";
-      if (confirm(text) === true) {
-        this.nrrd_states.clearAllFlag = true;
-        this.clearActiveSlice();
-        this.clearActiveLayer();
-      }
-      this.nrrd_states.clearAllFlag = false;
-    },
-    undo: () => {
-      this.undoLastPainting();
-    },
-    redo: () => {
-      this.redoLastPainting();
-    },
-    downloadCurrentMask: () => {
-      const config: IDownloadImageConfig = {
-        axis: this.protectedData.axis,
-        currentSliceIndex: this.nrrd_states.currentSliceIndex,
-        drawingCanvas: this.protectedData.canvases.drawingCanvas,
-        originWidth: this.nrrd_states.originWidth,
-        originHeight: this.nrrd_states.originHeight,
-      };
-      enableDownload(config);
-    },
-    resetZoom: () => {
-      this.nrrd_states.sizeFoctor = this.baseCanvasesSize;
-      this.gui_states.mainAreaSize = this.baseCanvasesSize;
-      this.resizePaintArea(this.nrrd_states.sizeFoctor);
-      this.resetPaintAreaUIPosition();
-    },
     activeChannel: 1,
     layerVisibility: { layer1: true, layer2: true, layer3: true },
     channelVisibility: {

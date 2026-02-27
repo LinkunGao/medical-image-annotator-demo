@@ -52,21 +52,14 @@
 /**
  * Operation Advance Component
  *
- * @description Advanced settings panel for customizing drawing colors:
- * - Pencil stroke color
- * - Pencil fill color
- * - Brush color
- *
- * Uses Vuetify color picker integrated with Copper3D GUI state.
+ * Phase 1 Refactored: guiSettings color access replaced with NrrdTools typed API.
  *
  * @listens Segmentation:FinishLoadAllCaseImages - Enables color picker after loading
  */
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
-import * as Copper from "@/ts/index";
-// import * as Copper from "copper3d";
+import type { NrrdTools } from "@/ts/index";
 
-/** Convert a hex color string (#rrggbb or #rrggbbaa) to an RGBA object */
 function hexToRgba(hex: string): { r: number; g: number; b: number; a: number } {
   const h = hex.replace('#', '');
   return {
@@ -77,7 +70,6 @@ function hexToRgba(hex: string): { r: number; g: number; b: number; a: number } 
   };
 }
 
-/** Convert a CSS rgba/rgb string to #rrggbb hex */
 function cssRgbaToHex(css: string): string {
   const match = css.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   if (!match) return '#ffffff';
@@ -87,64 +79,33 @@ function cssRgbaToHex(css: string): string {
   return `#${r}${g}${b}`;
 }
 
-/** Currently selected color mode (color, channelColor) */
 const commColorPickerRadios = ref("");
-
-/** Whether color picker radios are disabled */
 const commColorPickerRadiosDisabled = ref(true);
-
-/** Current color picker value in hex format */
 const commColorPicker = ref("#009688");
-
-/** Whether color picker is disabled */
 const commColorPickerDisabled = ref(true);
-
-/** Pencil stroke color */
 const pencilColor = ref("#f50a33");
 
-/** NrrdTools instance (received via emitter) */
-const nrrdTools = ref<Copper.NrrdTools | undefined>();
-
-/** Currently active layer id — kept in sync via LayerChannel:ActiveChanged */
+const nrrdTools = ref<NrrdTools | undefined>();
 const activeLayerId = ref<string>('layer1');
-
-/** Currently active channel — kept in sync via LayerChannel:ActiveChanged */
 const activeChannelNum = ref<number>(1);
-
-/**
- * Version counter — incremented to force channelColor to re-read from the volume
- * (Vue can't track mutations inside MaskVolume).
- */
 const colorVersion = ref(0);
 
-/**
- * Dynamically computed hex color of the currently active layer/channel.
- * Re-evaluates when layer, channel, or colorVersion changes.
- */
 const channelColor = computed(() => {
-  colorVersion.value; // reactive dependency for forced recomputation
+  colorVersion.value;
   if (!nrrdTools.value) return '#ffffff';
   return cssRgbaToHex(nrrdTools.value.getChannelCssColor(activeLayerId.value, activeChannelNum.value));
 });
 
-// When channelColor changes and the picker is in channelColor mode, sync the picker display
 watch(channelColor, (newColor) => {
   if (commColorPickerRadios.value === 'channelColor') {
     commColorPicker.value = newColor;
   }
 });
 
-/**
- * Radio button configuration for color type selection.
- * Colors are bound reactively to current values.
- */
 const commFuncRadioValues = ref([
   { label: "Pencil Color", value: "color", color: pencilColor },
   { label: "Channel Color", value: "channelColor", color: channelColor },
 ]);
-
-/** GUI settings reference from NrrdTools */
-const guiSettings = ref<any>();
 
 onMounted(() => {
   manageEmitters();
@@ -157,7 +118,7 @@ function manageEmitters() {
   emitter.on("LayerChannel:RefreshColors", emitterOnRefreshColors);
 }
 
-const emitterOnNrrdTools = (tools: Copper.NrrdTools) => {
+const emitterOnNrrdTools = (tools: NrrdTools) => {
   nrrdTools.value = tools;
 };
 
@@ -166,20 +127,17 @@ const emitterOnActiveChanged = (payload: { layerId: string; channel: number }) =
   activeChannelNum.value = payload.channel;
 };
 
-/** Increment colorVersion so channelColor recomputes after an external setChannelColor call */
 const emitterOnRefreshColors = () => {
   colorVersion.value++;
 };
 
-const emitterOnFinishLoadAllCaseImages = (val:
-  {
-    guiState: Copper.IGUIStates;
-    guiSetting: Copper.IGuiParameterSettings;
-  }) => {
-  guiSettings.value = val;
+const emitterOnFinishLoadAllCaseImages = () => {
   commColorPickerRadios.value = "color";
-  commColorPicker.value = guiSettings.value.guiState.color;
-  pencilColor.value = guiSettings.value.guiState.color;
+  if (nrrdTools.value) {
+    const currentColor = nrrdTools.value.getPencilColor();
+    commColorPicker.value = currentColor;
+    pencilColor.value = currentColor;
+  }
 
   commColorPickerRadiosDisabled.value = false;
   commColorPickerDisabled.value = false;
@@ -188,23 +146,26 @@ const emitterOnFinishLoadAllCaseImages = (val:
 function toggleColorPickerRadios(val: string | null) {
   if (val === null) return;
   if (val === "channelColor") {
-    // Show the current channel color in the picker
     commColorPicker.value = channelColor.value;
     return;
   }
-  commColorPicker.value = guiSettings.value.guiState[val];
+  if (nrrdTools.value) {
+    commColorPicker.value = nrrdTools.value.getPencilColor();
+  }
 }
 
 function handleOnColorPicked(color: string) {
   switch (commColorPickerRadios.value) {
     case "color":
-      pencilColor.value = guiSettings.value.guiState.color = color;
+      if (nrrdTools.value) {
+        nrrdTools.value.setPencilColor(color);
+      }
+      pencilColor.value = color;
       break;
     case "channelColor": {
       if (!nrrdTools.value) break;
       const rgba = hexToRgba(color);
       nrrdTools.value.setChannelColor(activeLayerId.value, activeChannelNum.value, rgba);
-      // Force channelColor to recompute, then notify LayerChannelSelector
       colorVersion.value++;
       emitter.emit("LayerChannel:RefreshColors");
       break;
