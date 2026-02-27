@@ -359,7 +359,7 @@ export class DrawingTool extends BaseTool {
 
     // Sync to volume
     this.callbacks.syncLayerSliceData(
-      this.ctx.nrrd_states.currentIndex,
+      this.ctx.nrrd_states.currentSliceIndex,
       this.ctx.gui_states.layer
     );
 

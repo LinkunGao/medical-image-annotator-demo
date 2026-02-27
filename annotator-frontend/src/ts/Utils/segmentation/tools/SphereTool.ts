@@ -428,16 +428,16 @@ export class SphereTool extends BaseTool {
     const nrrd = this.ctx.nrrd_states;
     const axis = this.ctx.protectedData.axis;
 
-    if (nrrd.tumourSphereOrigin && nrrd.tumourSphereOrigin[axis][2] === nrrd.currentIndex) {
+    if (nrrd.tumourSphereOrigin && nrrd.tumourSphereOrigin[axis][2] === nrrd.currentSliceIndex) {
       this.drawSphereCore(ctx, nrrd.tumourSphereOrigin[axis][0], nrrd.tumourSphereOrigin[axis][1], radius, this.getColorForSphereType('tumour'));
     }
-    if (nrrd.skinSphereOrigin && nrrd.skinSphereOrigin[axis][2] === nrrd.currentIndex) {
+    if (nrrd.skinSphereOrigin && nrrd.skinSphereOrigin[axis][2] === nrrd.currentSliceIndex) {
       this.drawSphereCore(ctx, nrrd.skinSphereOrigin[axis][0], nrrd.skinSphereOrigin[axis][1], radius, this.getColorForSphereType('skin'));
     }
-    if (nrrd.ribSphereOrigin && nrrd.ribSphereOrigin[axis][2] === nrrd.currentIndex) {
+    if (nrrd.ribSphereOrigin && nrrd.ribSphereOrigin[axis][2] === nrrd.currentSliceIndex) {
       this.drawSphereCore(ctx, nrrd.ribSphereOrigin[axis][0], nrrd.ribSphereOrigin[axis][1], radius, this.getColorForSphereType('ribcage'));
     }
-    if (nrrd.nippleSphereOrigin && nrrd.nippleSphereOrigin[axis][2] === nrrd.currentIndex) {
+    if (nrrd.nippleSphereOrigin && nrrd.nippleSphereOrigin[axis][2] === nrrd.currentSliceIndex) {
       this.drawSphereCore(ctx, nrrd.nippleSphereOrigin[axis][0], nrrd.nippleSphereOrigin[axis][1], radius, this.getColorForSphereType('nipple'));
     }
     // NOTE: Does NOT composite to master canvas — the start() render loop
@@ -632,7 +632,7 @@ export class SphereTool extends BaseTool {
 
     if (!vol) return;
 
-    const sliceIndex = nrrd.currentIndex;
+    const sliceIndex = nrrd.currentSliceIndex;
 
     try {
       const dims = vol.getDimensions();

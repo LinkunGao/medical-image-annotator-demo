@@ -488,7 +488,7 @@ export class DrawToolCore extends CommToolsData {
         : this.protectedData.maskData.volumes[layer];
 
       const tempPreImg = volume.getSliceImageData(
-        this.nrrd_states.currentIndex,
+        this.nrrd_states.currentSliceIndex,
         this.protectedData.axis
       );
 
@@ -516,7 +516,7 @@ export class DrawToolCore extends CommToolsData {
           this.protectedData.canvases.drawingCanvasLayerMaster.height
         );
 
-      this.storeAllImages(this.nrrd_states.currentIndex, this.gui_states.layer);
+      this.storeAllImages(this.nrrd_states.currentSliceIndex, this.gui_states.layer);
 
       // ... rest of logic
     };
@@ -534,7 +534,7 @@ export class NrrdTools extends DrawToolCore {
   syncAxisX() {
     const volume = this.protectedData.maskData.volumes[this.gui_states.layer];
     const imageData = volume.getSliceImageData(
-      this.nrrd_states.currentIndex,
+      this.nrrd_states.currentSliceIndex,
       'x'  // Sagittal slice
     );
     // ... render imageData
@@ -543,7 +543,7 @@ export class NrrdTools extends DrawToolCore {
   syncAxisY() {
     const volume = this.protectedData.maskData.volumes[this.gui_states.layer];
     const imageData = volume.getSliceImageData(
-      this.nrrd_states.currentIndex,
+      this.nrrd_states.currentSliceIndex,
       'y'  // Coronal slice
     );
     // ... render imageData
@@ -552,7 +552,7 @@ export class NrrdTools extends DrawToolCore {
   syncAxisZ() {
     const volume = this.protectedData.maskData.volumes[this.gui_states.layer];
     const imageData = volume.getSliceImageData(
-      this.nrrd_states.currentIndex,
+      this.nrrd_states.currentSliceIndex,
       'z'  // Axial slice
     );
     // ... render imageData

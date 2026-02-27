@@ -200,7 +200,7 @@ export class DragOperator {
       this.updateIndex(this.dragPrameters.move);
       opts?.getSliceNum &&
         opts.getSliceNum(
-          this.nrrd_states.currentIndex,
+          this.nrrd_states.currentSliceIndex,
           this.nrrd_states.contrastNum
         );
       this.dragPrameters.y = ev.offsetY / this.dragPrameters.h;

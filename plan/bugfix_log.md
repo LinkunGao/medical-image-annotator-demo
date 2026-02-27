@@ -39,7 +39,7 @@ Track all bug fixes and regressions to prevent re-introducing issues.
 After Fix 1, the `getMask` callback was inside the `try` block. If any volume operation threw an exception, the `catch` block silently swallowed the error and `getMask` was never called — the backend was never notified of the clear.
 
 ### Fix
-- Moved `getMask` notification OUT of the try-catch by restoring the `storeAllImages(currentIndex, activeLayer)` call after the try block. `storeAllImages` reliably reads the (now empty) canvas, syncs to volume, and calls `getMask`.
+- Moved `getMask` notification OUT of the try-catch by restoring the `storeAllImages(currentSliceIndex, activeLayer)` call after the try block. `storeAllImages` reliably reads the (now empty) canvas, syncs to volume, and calls `getMask`.
 - The try block now only handles volume clearing and undo recording.
 
 ### Regression Risk

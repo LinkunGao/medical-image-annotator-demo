@@ -684,7 +684,7 @@ const maxSlices = nrrdTools.getMaxSliceNum();
 // → [512, 512, 256]  (one per axis)
 
 // Current viewing state
-const { currentIndex, contrastIndex } = nrrdTools.getCurrentSlicesNumAndContrastNum();
+const { currentSliceIndex, contrastIndex } = nrrdTools.getCurrentSlicesNumAndContrastNum();
 ```
 
 ### Accessing internal canvases

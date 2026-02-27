@@ -1,340 +1,569 @@
-# GUI State API Refactor — Task List
+# State Management Refactor — Task List
 
 > **Plan:** [gui_state_api_refactor_plan.md](gui_state_api_refactor_plan.md)
 > **Status:** Not Started
-> **Estimated Duration:** 2-3 days
+> **Estimated Duration:** 3-4 weeks (5 phases)
 
 ---
 
-## Phase A: Add NrrdTools Public API Methods
+## Architecture: State Management Classes
 
-### A1. Add `ToolMode` type and `IGuiMeta` interface
-- **File:** `coreType.ts`
-- **Status:** ⬜ Not Started
-- **Details:**
-  ```typescript
-  type ToolMode = "pencil" | "brush" | "eraser" | "sphere" | "calculator";
+在 Phase 4/5 中，不是简单把 interface 拆开散落各处，而是创建集中管理的 State 类：
 
-  interface IGuiMeta {
-    globalAlpha: { min: number; max: number; step: number };
-    brushAndEraserSize: { min: number; max: number; step: number };
-    windowHigh: { min: number; max: number; step: number };
-    windowLow: { min: number; max: number; step: number };
+```
+CommToolsData
+  ├── nrrdState: NrrdState          ← 替代旧的 nrrd_states 扁平对象
+  │     ├── .image: IImageMetadata       (只读，加载后不变)
+  │     ├── .view: IViewState            (视图运行时)
+  │     ├── .interaction: IInteractionState (鼠标/光标)
+  │     ├── .sphere: ISphereState        (Sphere 工具专属)
+  │     └── .flags: IInternalFlags       (内部标志)
+  │
+  ├── guiState: GuiState            ← 替代旧的 gui_states 扁平对象
+  │     ├── .mode: IToolModeState        (工具模式)
+  │     ├── .drawing: IDrawingConfig     (绘图参数)
+  │     ├── .viewConfig: IViewConfig     (视图配置)
+  │     └── .layerChannel: ILayerChannelState (图层/通道)
+  │
+  └── protectedData: IProtected     ← 结构已合理，不拆分，仅 protected 化
+```
+
+**为什么需要类而不只是接口？**
+
+```typescript
+// ❌ 仅拆接口 — 散落各处，没有验证，难维护
+this.imageMetadata.originWidth = w;  // 任何地方都能改
+this.viewState.sizeFoctor = -1;       // 没有验证
+
+// ✅ State 管理类 — 集中管理，有验证，有类型方法
+class NrrdState {
+  private _image: IImageMetadata;
+  private _view: IViewState;
+
+  get image(): Readonly<IImageMetadata> { return this._image; }
+  get view(): IViewState { return this._view; }
+
+  /** 只在加载时调一次 */
+  initializeImageMetadata(data: IImageMetadata): void { ... }
+
+  /** 带验证的 setter */
+  setZoomFactor(factor: number): void {
+    this._view.sizeFoctor = Math.max(1, Math.min(8, factor));
+  }
+
+  /** 语义化的状态转换 */
+  resetSphereState(): void {
+    this._sphere.sphereOrigin = { x: [0,0,0], y: [0,0,0], z: [0,0,0] };
+    this._sphere.tumourSphereOrigin = null;
+    // ... 集中管理所有 sphere 重置逻辑
+  }
+}
+```
+
+**工具通过 ToolContext 访问 State 类：**
+```typescript
+interface ToolContext {
+  state: NrrdState;       // 新的 grouped 访问
+  gui: GuiState;          // 新的 grouped 访问
+  protectedData: IProtected;
+  callbacks: IAnnotationCallbacks;
+}
+
+// 工具内部使用
+this.ctx.state.view.changedWidth
+this.ctx.state.sphere.sphereRadius
+this.ctx.gui.drawing.brushColor
+```
+
+---
+
+## Phase 1: GUI API Encapsulation (2-3 days, Low Risk)
+
+> 消除 Vue 组件直接访问 `guiSettings.guiState[key]` / `guiSetting[key].onChange()` 的模式
+
+### Task 1.1: 添加类型定义
+- **文件:** `coreType.ts`, `index.ts`
+- [ ] 定义 `ToolMode` 类型: `"pencil" | "brush" | "eraser" | "sphere" | "calculator"`
+- [ ] 定义 `IGuiMeta` 接口: `{ [key]: { min, max, step, value } }`
+- [ ] 从 `index.ts` 导出 `ToolMode` 和 `IGuiMeta`
+- [ ] TypeScript 编译通过
+
+### Task 1.2: 在 NrrdTools 中存储 gui.ts 闭包回调
+- **文件:** `NrrdTools.ts`
+- [ ] 定义 `private guiCallbacks` 对象类型
+- [ ] 在 `setupGUI()` 中, `setupGui()` 返回后, 将 onChange 回调存储到 `guiCallbacks`
+- [ ] 确认 `guiCallbacks` 包含: `updatePencilState`, `updateEraserState`, `updateBrushAndEraserSize`, `updateSphereState`, `updateCalDistance`, `updateWindowHigh`, `updateWindowLow`, `finishContrastAdjustment`
+- [ ] TypeScript 编译通过
+
+### Task 1.3: 实现 `setMode()` / `getMode()`
+- **文件:** `NrrdTools.ts`
+- [ ] 实现 `setMode(mode: ToolMode): void`
+  - [ ] 处理 deactivate 前一个模式 (重置 gui_states flags)
+  - [ ] 处理 activate 新模式 (设置 gui_states flags)
+  - [ ] 调用对应的 side-effect (`guiCallbacks.updatePencilState/updateEraserState/...`)
+  - [ ] 处理 sphere → 调用 `enterSphereMode()` / `exitSphereMode()`
+  - [ ] 处理 calculator 特殊逻辑
+- [ ] 实现 `getMode(): ToolMode`
+  - [ ] 根据 gui_states.pencil/Eraser/sphere 等 flags 返回当前模式
+- [ ] 实现 `isCalculatorActive(): boolean`
+- [ ] TypeScript 编译通过
+- [ ] 手动测试: 模式切换 pencil → brush → eraser → sphere → calculator → pencil
+- **依赖:** 1.2
+
+### Task 1.4: 实现 slider 方法
+- **文件:** `NrrdTools.ts`
+- [ ] `setOpacity(value: number): void` — clamp [0.1, 1], 设置 `gui_states.globalAlpha`
+- [ ] `getOpacity(): number`
+- [ ] `setBrushSize(size: number): void` — clamp [5, 50], 设置 `gui_states.brushAndEraserSize`, 调用 `guiCallbacks.updateBrushAndEraserSize()`
+- [ ] `getBrushSize(): number`
+- [ ] `setWindowHigh(value: number): void` — 设置 `readyToUpdate=false`, 调用 `guiCallbacks.updateWindowHigh(value)`
+- [ ] `setWindowLow(value: number): void` — 同上
+- [ ] `finishWindowAdjustment(): void` — 调用 `guiCallbacks.finishContrastAdjustment()`
+- [ ] `adjustContrast(type: "windowHigh"|"windowLow", delta: number): void` — 计算新值 + clamp + 调用 setWindowHigh/setWindowLow
+- [ ] `getSliderMeta(key: string): { min, max, step, value }` — 返回 UI slider 需要的元数据
+- [ ] TypeScript 编译通过
+- [ ] 手动测试: 拖动各 slider 验证效果
+- **依赖:** 1.2
+
+### Task 1.5: 扩展 `setActiveSphereType()` 加入颜色 side-effect
+- **文件:** `NrrdTools.ts`
+- [ ] 在现有 `setActiveSphereType()` (NrrdTools.ts:196) 中添加 gui.ts `updateCalDistance()` 的颜色更新逻辑
+- [ ] 根据 `SPHERE_CHANNEL_MAP` 获取 layer + channel
+- [ ] 从 volume 获取颜色 → 设置 `gui_states.fillColor` 和 `gui_states.brushColor`
+- [ ] TypeScript 编译通过
+- [ ] 手动测试: 切换 sphere type → 颜色变化正确
+
+### Task 1.6: 添加 color + button 方法
+- **文件:** `NrrdTools.ts`
+- [ ] `setPencilColor(hex: string): void` — 设置 `gui_states.color`
+- [ ] `getPencilColor(): string`
+- [ ] `executeAction(action: "undo"|"redo"|"clear"|"clearAll"|"resetZoom"): void` — 分发到对应方法
+- [ ] TypeScript 编译通过
+
+### Task 1.7: 迁移 `OperationCtl.vue` (24 usages)
+- **文件:** `OperationCtl.vue`
+- [ ] `toggleFuncRadios()` → 使用 `nrrdTools.setMode(val)`
+  - [ ] 保留 emitter.emit("Common:OpenCalculatorBox") 等事件逻辑
+  - [ ] 删除手动 `guiState["sphere"] = true/false` 等 15+ 行
+  - [ ] 删除手动 `guiSetting["sphere"].onChange()` 调用
+- [ ] `toggleSlider()` → 使用 `nrrdTools.setOpacity/setBrushSize/setWindowHigh/setWindowLow`
+- [ ] `toggleSliderFinished()` → 使用 `nrrdTools.finishWindowAdjustment()`
+- [ ] `dragToChangeImageWindow()` → 使用 `nrrdTools.adjustContrast(type, delta)`
+- [ ] `updateSliderSettings()` → 使用 `nrrdTools.getSliderMeta(key)`
+- [ ] `onBtnClick()` → 使用 `nrrdTools.executeAction(val)`
+- [ ] 移除 `const guiSettings = ref<any>()` 声明 (如果不再需要)
+- [ ] TypeScript 编译通过
+- [ ] 手动测试: 所有 OperationCtl 功能正常
+- **依赖:** 1.3, 1.4, 1.6
+
+### Task 1.8: 迁移 `Calculator.vue` (9 usages)
+- **文件:** `Calculator.vue`
+- [ ] 添加 `Core:NrrdTools` emitter handler 获取 nrrdTools 引用
+- [ ] `toggleCalculatorPickerRadios()` → `nrrdTools.setActiveSphereType(val)`
+- [ ] `onBtnClick()` → `nrrdTools.setActiveSphereType("tumour")`
+- [ ] `guiState["calculator"]` 读取 → `nrrdTools.isCalculatorActive()`
+- [ ] 移除不再需要的 `guiSettings` 引用
+- [ ] TypeScript 编译通过
+- [ ] 手动测试: calculator 面板正常工作
+- **依赖:** 1.5
+
+### Task 1.9: 迁移 `OperationAdvance.vue` (5 usages)
+- **文件:** `OperationAdvance.vue`
+- [ ] color 读取 → `nrrdTools.value!.getPencilColor()`
+- [ ] color 写入 → `nrrdTools.value!.setPencilColor(color)`
+- [ ] 移除不再需要的 `guiSettings` 引用
+- [ ] TypeScript 编译通过
+- [ ] 手动测试: 颜色选择器正常
+- **依赖:** 1.6
+
+### Task 1.10: Phase 1 综合验证
+- [ ] `yarn build` — 零新增 TypeScript 错误
+- [ ] 模式切换: pencil → brush → eraser → sphere → calculator → pencil
+- [ ] Opacity slider: 拖动 → mask 透明度变化
+- [ ] Brush size slider: 拖动 → 笔刷大小变化
+- [ ] Window high slider: 拖动 → 对比度变化, 松开 → 重绘
+- [ ] Window low slider: 同上
+- [ ] Contrast drag: 在图像上拖动调整对比度
+- [ ] Sphere type: tumour/skin/nipple/ribcage 切换 → 颜色变化
+- [ ] Undo/redo: 画 → undo → redo
+- [ ] Clear/clearAll: 画 → clear slice → 画 → clear all
+- [ ] Reset zoom: zoom in → reset
+- [ ] Color picker: 改 pencil color → 绘图使用新颜色
+- [ ] dat.gui 面板: 如果可见, 控件仍然同步
+
+---
+
+## Phase 2: Callbacks & Methods Extraction (1-2 days, Low Risk)
+
+> 从 nrrd_states 移出 5 个回调, 从 gui_states 移出 6 个方法
+
+### Task 2.1: 定义 `IAnnotationCallbacks` 接口
+- **文件:** `coreType.ts`
+- [ ] 定义接口:
+  ```
+  IAnnotationCallbacks {
+    onMaskChanged(sliceData, layerId, channelId, sliceIndex, axis, width, height, clearFlag): void
+    onSphereChanged(sphereOrigin, sphereRadius): void
+    onCalculatorPositionsChanged(tumour, skin, rib, nipple, axis): void
+    onLayerVolumeCleared(layerId): void
+    onChannelColorChanged(layerId, channel, color): void
   }
   ```
-- **Export** both from `coreType.ts` and re-export from `index.ts`
+- [ ] 导出接口
+- [ ] TypeScript 编译通过
 
-### A2. Add `setMode()` and `getMode()` to NrrdTools
-- **File:** `NrrdTools.ts`
-- **Status:** ⬜ Not Started
-- **Details:**
-  - Implement `setMode(mode: ToolMode): void`
-  - Move the mode-switching logic from OperationCtl.vue:260-299 into this method
-  - Handle state transitions:
-    - Deactivate previous mode (reset `gui_states` flags)
-    - Activate new mode (set `gui_states` flags)
-    - Call appropriate side-effect: `updatePencilState()`, `updateEraserState()`, `enterSphereMode()`, `exitSphereMode()`
-  - Need access to gui.ts closure callbacks → store them as class properties during `setupGUI()`
-  - `getMode()` returns current active mode by checking `gui_states` flags
-- **Depends on:** A1, A3
+### Task 2.2: 添加 `annotationCallbacks` 到 DrawToolCore
+- **文件:** `DrawToolCore.ts`, `CommToolsData.ts`
+- [ ] 在 CommToolsData 或 DrawToolCore 添加 `protected annotationCallbacks: IAnnotationCallbacks`
+- [ ] 初始化为 no-op 默认值
+- [ ] 在 DrawToolCore 的 draw options 处理中赋值 (当前是 `this.nrrd_states.getMask = opts.getMaskData`)
+- [ ] TypeScript 编译通过
 
-### A3. Store gui.ts callbacks as class properties
-- **File:** `NrrdTools.ts`
-- **Status:** ⬜ Not Started
-- **Details:**
-  - After `setupGui()` returns `IGuiParameterSettings`, store the onChange callbacks:
-    ```typescript
-    private guiCallbacks: {
-      updatePencilState: () => void;
-      updateEraserState: () => void;
-      updateBrushAndEraserSize: () => void;
-      updateSphereState: () => void;
-      updateCalDistance: (val: SphereType) => void;
-      updateWindowHigh: (value: number) => void;
-      updateWindowLow: (value: number) => void;
-      finishContrastAdjustment: () => void;
-    };
-    ```
-  - Populate from `this.guiParameterSettings` in `setupGUI()`:
-    ```typescript
-    this.guiCallbacks = {
-      updatePencilState: this.guiParameterSettings.pencil.onChange,
-      updateEraserState: this.guiParameterSettings.Eraser.onChange,
-      updateBrushAndEraserSize: this.guiParameterSettings.brushAndEraserSize.onChange,
-      updateSphereState: this.guiParameterSettings.sphere.onChange,
-      updateCalDistance: this.guiParameterSettings.activeSphereType.onChange,
-      updateWindowHigh: this.guiParameterSettings.windowHigh.onChange,
-      updateWindowLow: this.guiParameterSettings.windowLow.onChange,
-      finishContrastAdjustment: this.guiParameterSettings.windowHigh.onFinished,
-    };
-    ```
-- **Depends on:** A1
+### Task 2.3: 更新 ToolContext 添加 callbacks
+- **文件:** `tools/BaseTool.ts`
+- [ ] `ToolContext` 接口添加 `callbacks: IAnnotationCallbacks`
+- [ ] DrawToolCore 创建 ToolContext 时传入 `this.annotationCallbacks`
+- [ ] TypeScript 编译通过
 
-### A4. Add slider methods to NrrdTools
-- **File:** `NrrdTools.ts`
-- **Status:** ⬜ Not Started
-- **Methods:**
-  - `setOpacity(value: number): void` — clamp 0.1–1, set `gui_states.globalAlpha`
-  - `getOpacity(): number`
-  - `setBrushSize(size: number): void` — clamp 5–50, set `gui_states.brushAndEraserSize`, call `guiCallbacks.updateBrushAndEraserSize()`
-  - `getBrushSize(): number`
-  - `setWindowHigh(value: number): void` — set readyToUpdate=false, call `guiCallbacks.updateWindowHigh(value)`
-  - `setWindowLow(value: number): void` — set readyToUpdate=false, call `guiCallbacks.updateWindowLow(value)`
-  - `finishWindowAdjustment(): void` — call `guiCallbacks.finishContrastAdjustment()`
-  - `adjustContrast(type: "windowHigh" | "windowLow", delta: number): void` — for drag events, computes new value, clamps, calls setWindowHigh/setWindowLow
-  - `getSliderMeta(key): { min, max, step, currentValue }` — returns metadata for UI slider rendering
-- **Depends on:** A3
+### Task 2.4: 迁移回调引用 (~30 refs)
+- [ ] `DrawToolCore.ts`: `this.nrrd_states.getMask(...)` → `this.annotationCallbacks.onMaskChanged(...)`
+- [ ] `NrrdTools.ts`: `this.nrrd_states.onClearLayerVolume(...)` → `this.annotationCallbacks.onLayerVolumeCleared(...)`
+- [ ] `NrrdTools.ts`: `this.nrrd_states.onChannelColorChanged(...)` → `this.annotationCallbacks.onChannelColorChanged(...)`
+- [ ] `tools/ImageStoreHelper.ts`: `this.ctx.nrrd_states.getMask(...)` → `this.ctx.callbacks.onMaskChanged(...)`
+- [ ] `tools/SphereTool.ts`: `this.ctx.nrrd_states.getSphere(...)` → `this.ctx.callbacks.onSphereChanged(...)`
+- [ ] `tools/SphereTool.ts`: `this.ctx.nrrd_states.getCalculateSpherePositions(...)` → `this.ctx.callbacks.onCalculatorPositionsChanged(...)`
+- [ ] 确认所有 ~30 个引用已迁移 (grep 验证无遗漏)
+- [ ] TypeScript 编译通过
 
-### A5. Extend `setActiveSphereType()` with color side-effect
-- **File:** `NrrdTools.ts`
-- **Status:** ⬜ Not Started
-- **Details:**
-  - Current implementation (NrrdTools.ts:196) only sets `gui_states.activeSphereType`
-  - Add the color update logic from gui.ts `updateCalDistance()`:
-    ```typescript
-    setActiveSphereType(type: SphereType): void {
-      this.gui_states.activeSphereType = type;
-      // Color side-effect (moved from gui.ts updateCalDistance)
-      const { layer, channel } = SPHERE_CHANNEL_MAP[type];
-      const volume = this.getVolumeForLayer(layer);
-      const color = volume
-        ? rgbaToHex(volume.getChannelColor(channel))
-        : (CHANNEL_HEX_COLORS[channel] || '#00ff00');
-      this.gui_states.fillColor = color;
-      this.gui_states.brushColor = color;
-    }
-    ```
-- **Depends on:** None (can be done independently)
+### Task 2.5: 从 `INrrdStates` 移除回调
+- **文件:** `coreType.ts`, `CommToolsData.ts`
+- [ ] 从 `INrrdStates` interface 删除: `getMask`, `getSphere`, `getCalculateSpherePositions`, `onClearLayerVolume`, `onChannelColorChanged`
+- [ ] 从 `CommToolsData.ts` 的 `nrrd_states` 初始化中删除对应字段
+- [ ] TypeScript 编译通过
+- **依赖:** 2.4 完成
 
-### A6. Add color methods to NrrdTools
-- **File:** `NrrdTools.ts`
-- **Status:** ⬜ Not Started
-- **Methods:**
-  - `setPencilColor(hex: string): void` — set `gui_states.color`
-  - `getPencilColor(): string` — return `gui_states.color`
-- **Depends on:** None
+### Task 2.6: 从 `IGUIStates` 移除方法
+- **文件:** `coreType.ts`, `CommToolsData.ts`, `gui.ts`
+- [ ] 从 `IGUIStates` interface 删除: `clear()`, `clearAll()`, `undo()`, `redo()`, `downloadCurrentMask()`, `resetZoom()`
+- [ ] 从 `CommToolsData.ts` 的 `gui_states` 初始化中删除对应方法实现
+- [ ] 确认 NrrdTools 已有替代方法: `undo()` (453行), `redo()` (469行), `clearActiveSlice()` (1291行)
+- [ ] 添加缺失的方法: `resetZoom()`, `downloadCurrentMask()` 到 NrrdTools
+- [ ] 更新 `gui.ts` 中 dat.gui 的 `.add()` 绑定 — 创建一个简单的 actions 对象供 dat.gui 绑定
+- [ ] TypeScript 编译通过
+- **依赖:** 2.5 完成
 
-### A7. Add button action methods to NrrdTools
-- **File:** `NrrdTools.ts`
-- **Status:** ⬜ Not Started
-- **Details:**
-  - `clearActiveSlice()` — already exists at NrrdTools.ts:1291 (calls `gui_states.clear` logic)
-  - `resetZoom()` — add: calls `gui_states.resetZoom()`
-  - `undo()` — already exists at NrrdTools.ts:453
-  - `redo()` — already exists at NrrdTools.ts:469
-  - `executeAction(action: "undo" | "redo" | "clear" | "clearAll" | "resetZoom"): void` — dispatch method for button clicks
-- **Depends on:** None
-
-### A8. Add `getGuiMeta()` method
-- **File:** `NrrdTools.ts`
-- **Status:** ⬜ Not Started
-- **Details:**
-  - Returns metadata only (no callbacks, no live state refs):
-    ```typescript
-    getGuiMeta(): IGuiMeta {
-      return {
-        globalAlpha: { min: 0.1, max: 1, step: 0.01 },
-        brushAndEraserSize: { min: 5, max: 50, step: 1 },
-        windowHigh: {
-          min: this.protectedData.mainPreSlices.volume.min,
-          max: this.protectedData.mainPreSlices.volume.max,
-          step: 1,
-        },
-        windowLow: { ... },
-      };
-    }
-    ```
-- **Depends on:** A1
-
-### A9. Re-export new types from `index.ts`
-- **File:** `src/ts/index.ts` (or wherever Copper exports are)
-- **Status:** ⬜ Not Started
-- **Details:**
-  - Export `ToolMode`, `IGuiMeta` so Vue components can import them as `Copper.ToolMode`
+### Task 2.7: Phase 2 综合验证
+- [ ] `yarn build` — 零新增错误
+- [ ] grep 验证: `nrrd_states` 中不再有 `getMask`, `getSphere` 等回调
+- [ ] grep 验证: `gui_states` 中不再有 `clear()`, `undo()` 等方法
+- [ ] 手动测试: Mask 保存到后端正常 (onMaskChanged)
+- [ ] 手动测试: Sphere 放置通知后端正常 (onSphereChanged)
+- [ ] 手动测试: Calculator positions 报告正常
+- [ ] 手动测试: Clear layer 通知后端正常
+- [ ] 手动测试: Channel color 变更传播正常
+- [ ] 手动测试: Undo/redo/clear/clearAll 通过 NrrdTools 方法正常
+- [ ] 手动测试: dat.gui 面板按钮正常
 
 ---
 
-## Phase B: Migrate Vue Components
+## Phase 3: Visibility Enforcement (1 day, Low Risk)
 
-### B1. Migrate `OperationCtl.vue` — mode switching
-- **File:** `OperationCtl.vue`
-- **Status:** ⬜ Not Started
-- **Changes:**
-  - Replace `toggleFuncRadios()` (lines 260-301):
-    ```typescript
-    // BEFORE: 40 lines of manual state management
-    // AFTER:
-    function toggleFuncRadios(val: string) {
-      if (val === "calculator") {
-        emitter.emit("Common:OpenCalculatorBox", "Calculator");
-        emitter.emit("SegmentationTrial:CalulatorTimerFunction", "start");
-        setupTumourSpherePosition();
-      } else {
-        emitter.emit("Common:CloseCalculatorBox", "Calculator");
-      }
-      nrrdTools.setMode(val as Copper.ToolMode);
-    }
-    ```
-  - Component needs `nrrdTools` reference (already has it via `emitterOnNrrdTools`)
-- **Depends on:** A2
+> 将 state 对象改为 protected，堵死外部直接访问
 
-### B2. Migrate `OperationCtl.vue` — slider controls
-- **File:** `OperationCtl.vue`
-- **Status:** ⬜ Not Started
-- **Changes:**
-  - Replace `toggleSlider()` (lines 307-323):
-    ```typescript
-    function toggleSlider(val: number) {
-      if (commSliderRadios.value === "sensitivity") {
-        contrastDragSensitivity.value = val;
-        return;
-      }
-      const key = commSliderRadios.value;
-      if (key === "globalAlpha") nrrdTools.setOpacity(val);
-      else if (key === "brushAndEraserSize") nrrdTools.setBrushSize(val);
-      else if (key === "windowHigh") nrrdTools.setWindowHigh(val);
-      else if (key === "windowLow") nrrdTools.setWindowLow(val);
-    }
-    ```
-  - Replace `toggleSliderFinished()` (lines 325-329):
-    ```typescript
-    function toggleSliderFinished(val: number) {
-      if (commSliderRadios.value === "windowHigh" || commSliderRadios.value === "windowLow") {
-        nrrdTools.finishWindowAdjustment();
-      }
-    }
-    ```
-  - Replace `updateSliderSettings()` (lines 331-361) to use `nrrdTools.getSliderMeta()`
-  - Replace `dragToChangeImageWindow()` (lines 234-248) to use `nrrdTools.adjustContrast()`
-- **Depends on:** A4
+### Task 3.1: 改 visibility 为 `protected`
+- **文件:** `CommToolsData.ts`
+- [ ] `nrrd_states` → `protected nrrd_states`
+- [ ] `gui_states` → `protected gui_states`
+- [ ] `protectedData` → `protected protectedData`
+- [ ] `cursorPage` → `protected cursorPage`
+- [ ] TypeScript 编译 — 记录所有报错位置
 
-### B3. Migrate `OperationCtl.vue` — button actions
-- **File:** `OperationCtl.vue`
-- **Status:** ⬜ Not Started
-- **Changes:**
-  - Replace `onBtnClick()` (line 363-365):
-    ```typescript
-    // BEFORE:
-    guiSettings.value.guiState[val].call();
-    // AFTER:
-    nrrdTools.executeAction(val as "undo" | "redo" | "clear" | "clearAll" | "resetZoom");
-    ```
-- **Depends on:** A7
+### Task 3.2: 修复外部违规 (4 refs)
+- [ ] `useDistanceCalculation.ts:51`: `nrrdTools.nrrd_states.voxelSpacing` → `nrrdTools.getVoxelSpacing()` (已有 getter)
+- [ ] `useDistanceCalculation.ts:58`: `nrrdTools.nrrd_states.spaceOrigin` → `nrrdTools.getSpaceOrigin()` (已有 getter)
+- [ ] `useDistanceCalculation.ts:148`: `nrrdTools.gui_states.activeSphereType` → `nrrdTools.getActiveSphereType()` (添加 getter)
+- [ ] `utils.ts:64`: `nrrdTools.nrrd_states.voxelSpacing` → `nrrdTools.getVoxelSpacing()` (已有 getter)
+- [ ] 添加 `getActiveSphereType(): SphereType` getter 到 NrrdTools
+- [ ] TypeScript 编译通过
 
-### B4. Migrate `Calculator.vue` — sphere type
-- **File:** `Calculator.vue`
-- **Status:** ⬜ Not Started
-- **Changes:**
-  - Replace `toggleCalculatorPickerRadios()` (lines 176-190):
-    ```typescript
-    function toggleCalculatorPickerRadios(val: string | null) {
-      if (val) {
-        nrrdTools.setActiveSphereType(val as Copper.SphereType);
-      }
-    }
-    ```
-  - Replace `onBtnClick()` (lines 192-201):
-    ```typescript
-    function onBtnClick(val: string) {
-      calculatorPickerRadios.value = "tumour";
-      nrrdTools.setActiveSphereType("tumour");
-      calculatorPickerRadiosDisabled.value = true;
-      calculatorTimerReport("finish");
-    }
-    ```
-  - Replace `guiSettings.value.guiState["calculator"]` reads (lines 121, 132) with `nrrdTools.isCalculatorActive()`
-  - Component needs `nrrdTools` reference — add emitter handler for `Core:NrrdTools`
-- **Depends on:** A5
+### Task 3.3: 简化 `getGuiSettings()` 返回值
+- **文件:** `NrrdTools.ts`
+- [ ] 评估: Phase 1 迁移后是否还有代码需要 `getGuiSettings()`
+- [ ] 如果不需要: 标记 deprecated 或删除
+- [ ] 如果仍需要: 简化为只返回 metadata (无回调)
+- [ ] 更新 `useCaseManagement.ts` 的 emitter payload
+- [ ] TypeScript 编译通过
 
-### B5. Migrate `OperationAdvance.vue` — color picker
-- **File:** `OperationAdvance.vue`
-- **Status:** ⬜ Not Started
-- **Changes:**
-  - Replace color read (line 181):
-    ```typescript
-    // BEFORE:
-    commColorPicker.value = guiSettings.value.guiState.color;
-    // AFTER:
-    commColorPicker.value = nrrdTools.value!.getPencilColor();
-    ```
-  - Replace color write (line 201):
-    ```typescript
-    // BEFORE:
-    pencilColor.value = guiSettings.value.guiState.color = color;
-    // AFTER:
-    nrrdTools.value!.setPencilColor(color);
-    pencilColor.value = color;
-    ```
-  - Component already has `nrrdTools` ref (line 106)
-- **Depends on:** A6
-
-### B6. Update `useCaseManagement.ts` emitter payload
-- **File:** `useCaseManagement.ts`
-- **Status:** ⬜ Not Started
-- **Changes:**
-  - `tellAllRelevantComponentsImagesLoaded()` (line 230-233):
-    - Still emit `guiSettings` for backward compatibility during migration
-    - After all components migrated, can simplify to emit `guiMeta` only
-    - OR: Components get NrrdTools ref directly from `Core:NrrdTools` emitter (already happening)
-- **Depends on:** B1-B5 all complete
+### Task 3.4: Phase 3 综合验证
+- [ ] `yarn build` — 零错误 (TypeScript 强制 protected 访问)
+- [ ] grep 验证: 无外部代码直接访问 `nrrd_states`, `gui_states`, `protectedData`
+- [ ] 手动测试: 全部功能正常 (绘图, 平移, sphere, 对比度, undo/redo)
 
 ---
 
-## Phase C: Clean Up
+## Phase 4: nrrd_states Semantic Split (1-2 weeks, Medium Risk)
 
-### C1. Simplify `getGuiSettings()` return type
-- **File:** `NrrdTools.ts`, `coreType.ts`
-- **Status:** ⬜ Not Started
-- **Details:**
-  - Remove `onChange` / `onFinished` callbacks from `IGuiParameterSettings`
-  - `getGuiSettings()` returns metadata only (or deprecate entirely in favor of `getGuiMeta()`)
-  - Keep `guiState` read access if any component still needs it
+> 创建 NrrdState 管理类，将 44 个属性拆分为 5 个语义组
 
-### C2. Remove `guiSettings` refs from Vue components
-- **Files:** `OperationCtl.vue`, `Calculator.vue`, `OperationAdvance.vue`
-- **Status:** ⬜ Not Started
-- **Details:**
-  - Remove `const guiSettings = ref<any>()` declarations
-  - Remove `guiSettings.value = val` in emitter handlers
-  - Components should only use `nrrdTools.*` methods
-  - If components need metadata (min/max/step), get it from `nrrdTools.getGuiMeta()` or `nrrdTools.getSliderMeta()`
+### Task 4.1: 定义 5 个语义接口
+- **文件:** `coreType.ts`
+- [ ] 定义 `IImageMetadata` (14 props):
+  - [ ] `originWidth`, `originHeight`
+  - [ ] `nrrd_x_mm`, `nrrd_y_mm`, `nrrd_z_mm`
+  - [ ] `nrrd_x_pixel`, `nrrd_y_pixel`, `nrrd_z_pixel`
+  - [ ] `dimensions`, `voxelSpacing`, `spaceOrigin`
+  - [ ] `RSARatio`, `ratios`
+  - [ ] `layers` (只读配置)
+- [ ] 定义 `IViewState` (12 props):
+  - [ ] `changedWidth`, `changedHeight`
+  - [ ] `currentSliceIndex`, `preSliceIndex`, `maxIndex`, `minIndex`
+  - [ ] `contrastNum`, `sizeFoctor`
+  - [ ] `showContrast`, `switchSliceFlag`
+  - [ ] `previousPanelL`, `previousPanelT`
+- [ ] 定义 `IInteractionState` (7 props):
+  - [ ] `Mouse_Over_x`, `Mouse_Over_y`, `Mouse_Over`
+  - [ ] `cursorPageX`, `cursorPageY`
+  - [ ] `isCursorSelect`
+  - [ ] `drawStartPos`
+- [ ] 定义 `ISphereState` (7 props):
+  - [ ] `sphereOrigin`
+  - [ ] `tumourSphereOrigin`, `skinSphereOrigin`, `ribSphereOrigin`, `nippleSphereOrigin`
+  - [ ] `sphereMaskVolume`, `sphereRadius`
+- [ ] 定义 `IInternalFlags` (3 props):
+  - [ ] `stepClear`, `clearAllFlag`, `loadingMaskData`
+- [ ] 导出所有接口
+- [ ] TypeScript 编译通过
 
-### C3. Update `Segmentation:FinishLoadAllCaseImages` event
-- **File:** `useCaseManagement.ts` + all listeners
-- **Status:** ⬜ Not Started
-- **Details:**
-  - Change emitter payload from `{ guiState, guiSetting }` to `{ guiMeta }` or remove payload entirely
-  - Components that need NrrdTools reference already get it from `Core:NrrdTools` emitter
+### Task 4.2: 创建 `NrrdState` 管理类
+- **文件:** 新建 `coreTools/NrrdState.ts`
+- [ ] 定义 `class NrrdState`
+- [ ] 私有持有 5 个组: `_image`, `_view`, `_interaction`, `_sphere`, `_flags`
+- [ ] 提供 getter 访问器:
+  - [ ] `get image(): IImageMetadata` (Phase 4 阶段可以先返回 mutable，后续再改 Readonly)
+  - [ ] `get view(): IViewState`
+  - [ ] `get interaction(): IInteractionState`
+  - [ ] `get sphere(): ISphereState`
+  - [ ] `get flags(): IInternalFlags`
+- [ ] 提供带验证的 setter 方法:
+  - [ ] `initializeImageMetadata(data: Partial<IImageMetadata>): void` — 加载时调用
+  - [ ] `setZoomFactor(factor: number): void` — clamp [1, 8]
+  - [ ] `setSliceIndex(index: number): void` — clamp [minIndex, maxIndex]
+  - [ ] `resetSphereState(): void` — 集中重置所有 sphere 属性
+  - [ ] `resetViewState(): void` — 集中重置视图状态
+- [ ] 构造函数接受初始值 (兼容 CommToolsData 现有初始化)
+- [ ] TypeScript 编译通过
 
-### C4. Verify & Manual Test
-- **Status:** ⬜ Not Started
-- **Checklist:**
-  - [ ] `yarn build` — zero new TypeScript errors
-  - [ ] Mode switching: pencil → brush → eraser → sphere → calculator → pencil
-  - [ ] Opacity slider: drag and verify mask transparency changes
-  - [ ] Brush size slider: drag and verify brush cursor size changes
-  - [ ] Window high slider: drag and verify contrast changes, release and verify repaint
-  - [ ] Window low slider: same as above
-  - [ ] Contrast drag: drag on image to adjust contrast
-  - [ ] Sphere type: switch between tumour/skin/nipple/ribcage, verify color changes
-  - [ ] Undo/redo: draw → undo → redo
-  - [ ] Clear/clearAll: draw → clear slice → draw → clear all
-  - [ ] Reset zoom: zoom in → reset
-  - [ ] Color picker: change pencil color, verify drawing uses new color
-  - [ ] dat.gui panel: if visible, controls still sync with NrrdTools methods
+### Task 4.3: 在 CommToolsData 中集成 NrrdState
+- **文件:** `CommToolsData.ts`
+- [ ] 添加 `protected nrrdState: NrrdState` 属性
+- [ ] 在构造函数中创建 NrrdState 实例 (使用当前 nrrd_states 的默认值)
+- [ ] 暂时保留旧 `nrrd_states` — 双轨并行
+- [ ] TypeScript 编译通过
+
+### Task 4.4: 更新 ToolContext
+- **文件:** `tools/BaseTool.ts`
+- [ ] ToolContext 添加 `state: NrrdState` (与旧 `nrrd_states` 并存)
+- [ ] DrawToolCore 创建 ToolContext 时传入 `this.nrrdState`
+- [ ] TypeScript 编译通过
+
+### Task 4.5: 迁移工具 — 批次 1 (小工具, ~14 refs)
+- [ ] **PanTool** (8 refs → `state.view`):
+  - [ ] `nrrd_states.previousPanelL/T` → `state.view.previousPanelL/T`
+  - [ ] 编译通过 + 手动测试平移
+- [ ] **ZoomTool** (3 refs → `state.view`):
+  - [ ] `nrrd_states.sizeFoctor` → `state.view.sizeFoctor`
+  - [ ] 编译通过 + 手动测试缩放
+- [ ] **ContrastTool** (~3 refs → `state.view`):
+  - [ ] `nrrd_states.showContrast` → `state.view.showContrast`
+  - [ ] 编译通过 + 手动测试对比度
+
+### Task 4.6: 迁移工具 — 批次 2 (中等工具, ~32 refs)
+- [ ] **EraserTool** (6 refs):
+  - [ ] `nrrd_states.layers` → `state.image.layers`
+  - [ ] `nrrd_states.changedWidth/Height` → `state.view.changedWidth/Height`
+  - [ ] 编译通过 + 手动测试橡皮擦
+- [ ] **DrawingTool** (14 refs):
+  - [ ] `nrrd_states.drawStartPos` → `state.interaction.drawStartPos`
+  - [ ] `nrrd_states.stepClear` → `state.flags.stepClear`
+  - [ ] `nrrd_states.changedWidth/Height` → `state.view.changedWidth/Height`
+  - [ ] 编译通过 + 手动测试画笔/铅笔
+- [ ] **ImageStoreHelper** (12 refs):
+  - [ ] `nrrd_states.loadingMaskData` → `state.flags.loadingMaskData`
+  - [ ] `nrrd_states.clearAllFlag` → `state.flags.clearAllFlag`
+  - [ ] `nrrd_states.layers` → `state.image.layers`
+  - [ ] 编译通过 + 手动测试 mask 存储
+
+### Task 4.7: 迁移工具 — 批次 3 (大工具, ~65 refs)
+- [ ] **DragSliceTool** (40 refs → `state.view` 为主):
+  - [ ] 所有 slice navigation: `state.view.currentSliceIndex/preSliceIndex/maxIndex/minIndex`
+  - [ ] contrast: `state.view.contrastNum/showContrast`
+  - [ ] canvas: `state.view.changedWidth/Height`
+  - [ ] `nrrd_states.RSARatio` → `state.image.RSARatio`
+  - [ ] `nrrd_states.switchSliceFlag` → `state.view.switchSliceFlag`
+  - [ ] 编译通过 + 手动测试切片拖动
+- [ ] **CrosshairTool** (55 refs → `state.image` + `state.interaction` + `state.sphere`):
+  - [ ] 坐标转换: `state.image.nrrd_x/y/z_mm/pixel`, `state.image.ratios`
+  - [ ] cursor: `state.interaction.cursorPageX/Y`, `state.interaction.isCursorSelect`
+  - [ ] sphere origins: `state.sphere.sphereOrigin`
+  - [ ] 编译通过 + 手动测试十字线
+- [ ] **SphereTool** (70 refs → `state.sphere` + `state.image` + `state.view`):
+  - [ ] 所有 sphere state: `state.sphere.*`
+  - [ ] dimensions: `state.image.nrrd_x/y/z_mm`
+  - [ ] canvas: `state.view.changedWidth/Height`
+  - [ ] 编译通过 + 手动测试 sphere 放置
+
+### Task 4.8: 迁移核心模块 (~160 refs)
+- [ ] **DrawToolCore.ts** (~60 refs):
+  - [ ] 按组替换所有 `this.nrrd_states.X` → `this.nrrdState.group.X`
+  - [ ] 编译通过
+- [ ] **NrrdTools.ts** (~100 refs):
+  - [ ] 按组替换所有 `this.nrrd_states.X` → `this.nrrdState.group.X`
+  - [ ] 更新所有 public getter 方法读取 NrrdState
+  - [ ] 编译通过
+- [ ] **CommToolsData.ts**:
+  - [ ] 替换剩余的 `this.nrrd_states.X` 引用
+  - [ ] 编译通过
+- [ ] **DragOperator.ts**:
+  - [ ] 替换引用
+  - [ ] 编译通过
+- [ ] **gui.ts**:
+  - [ ] 替换 `configs.nrrd_states.X` 引用
+  - [ ] 编译通过
+
+### Task 4.9: 移除旧 `nrrd_states`
+- **文件:** `CommToolsData.ts`, `coreType.ts`, `BaseTool.ts`
+- [ ] 从 `CommToolsData` 删除 `nrrd_states` 属性
+- [ ] 从 `ToolContext` 删除 `nrrd_states` 字段
+- [ ] 从 `coreType.ts` 删除 `INrrdStates` interface
+- [ ] 从 `IConfigGUI` 删除 `nrrd_states` 字段
+- [ ] grep 验证: 代码中不再有 `nrrd_states` 引用
+- [ ] TypeScript 编译通过
+- **依赖:** 4.5-4.8 全部完成
+
+### Task 4.10: Phase 4 综合验证
+- [ ] `yarn build` — 零错误
+- [ ] 画图 (pencil, brush, eraser) — 三个轴
+- [ ] 平移 (右键拖动)
+- [ ] 缩放 (滚轮 / slider)
+- [ ] 切片导航 (拖动, 滚轮)
+- [ ] Sphere 放置 (4 种类型)
+- [ ] Calculator 模式
+- [ ] Crosshair (光标位置跨轴同步)
+- [ ] 对比度调整 (slider + drag)
+- [ ] Undo/redo
+- [ ] Mask save/load
+- [ ] Layer/channel 切换
+- [ ] Clear slice / clear all
+
+---
+
+## Phase 5: gui_states Cleanup (3-5 days, Medium Risk)
+
+> 创建 GuiState 管理类，将 24 个属性拆分为 4 个语义组
+
+### Task 5.1: 定义 4 个语义接口
+- **文件:** `coreType.ts`
+- [ ] 定义 `IToolModeState` (4 props):
+  - [ ] `pencil`, `Eraser`, `sphere`, `activeSphereType`
+- [ ] 定义 `IDrawingConfig` (6 props):
+  - [ ] `globalAlpha`, `lineWidth`, `color`, `fillColor`, `brushColor`, `brushAndEraserSize`
+- [ ] 定义 `IViewConfig` (6 props):
+  - [ ] `mainAreaSize`, `dragSensitivity`, `cursor`
+  - [ ] `defaultPaintCursor` (内部), `max_sensitive` (内部), `readyToUpdate` (内部)
+- [ ] 定义 `ILayerChannelState` (4 props):
+  - [ ] `layer`, `activeChannel`, `layerVisibility`, `channelVisibility`
+- [ ] 导出所有接口
+- [ ] TypeScript 编译通过
+
+### Task 5.2: 创建 `GuiState` 管理类
+- **文件:** 新建 `coreTools/GuiState.ts`
+- [ ] 定义 `class GuiState`
+- [ ] 私有持有 4 个组: `_mode`, `_drawing`, `_viewConfig`, `_layerChannel`
+- [ ] 提供 getter 访问器:
+  - [ ] `get mode(): IToolModeState`
+  - [ ] `get drawing(): IDrawingConfig`
+  - [ ] `get viewConfig(): IViewConfig`
+  - [ ] `get layerChannel(): ILayerChannelState`
+- [ ] 提供带验证的 setter 方法:
+  - [ ] `setToolMode(mode: ToolMode): void` — 确保互斥 (pencil/eraser/sphere 不能同时 true)
+  - [ ] `setBrushSize(size: number): void` — clamp [5, 50]
+  - [ ] `setOpacity(value: number): void` — clamp [0.1, 1]
+- [ ] 构造函数接受初始值 (兼容现有默认值)
+- [ ] TypeScript 编译通过
+
+### Task 5.3: 在 CommToolsData 中集成 GuiState
+- **文件:** `CommToolsData.ts`
+- [ ] 添加 `protected guiState: GuiState` 属性
+- [ ] 在构造函数中创建 GuiState 实例
+- [ ] 暂时保留旧 `gui_states` — 双轨并行
+- [ ] 更新 ToolContext 添加 `gui: GuiState`
+- [ ] TypeScript 编译通过
+
+### Task 5.4: 迁移内部引用 (~136 refs)
+- [ ] **gui.ts** (~29 refs):
+  - [ ] `configs.gui_states.Eraser` → `configs.guiState.mode.Eraser`
+  - [ ] `configs.gui_states.brushColor` → `configs.guiState.drawing.brushColor`
+  - [ ] 等等, 按组替换
+  - [ ] 编译通过
+- [ ] **DrawToolCore.ts** (~34 refs):
+  - [ ] 按组替换
+  - [ ] 编译通过
+- [ ] **NrrdTools.ts** (~29 refs):
+  - [ ] 按组替换
+  - [ ] 编译通过
+- [ ] **DrawingTool.ts** (~18 refs):
+  - [ ] `this.ctx.gui_states.X` → `this.ctx.gui.group.X`
+  - [ ] 编译通过
+- [ ] **其他工具** (EraserTool ~3, ImageStoreHelper ~5, DragOperator ~3, DragSliceTool ~3, PanTool ~1, SphereTool ~4):
+  - [ ] 按组替换
+  - [ ] 每个工具编译通过
+
+### Task 5.5: 移除旧 `gui_states`
+- **文件:** `CommToolsData.ts`, `coreType.ts`, `BaseTool.ts`
+- [ ] 从 `CommToolsData` 删除 `gui_states` 属性
+- [ ] 从 `ToolContext` 删除 `gui_states` 字段
+- [ ] 从 `coreType.ts` 删除 `IGUIStates` interface
+- [ ] grep 验证: 代码中不再有 `gui_states` 引用
+- [ ] TypeScript 编译通过
+- **依赖:** 5.4 完成
+
+### Task 5.6: Phase 5 综合验证
+- [ ] `yarn build` — 零错误
+- [ ] 同 Phase 4 的完整手动测试清单
+- [ ] 验证 dat.gui 面板仍然正常工作
+- [ ] 验证 NrrdTools 所有 public API 方法正常
+
+---
+
+## Final Cleanup
+
+### Task F.1: 命名修正 (可选, 低优先级)
+- [ ] `sizeFoctor` → `sizeFactor` (typo)
+- [ ] `Mouse_Over_x/y` → `mouseOverX/Y`
+- [ ] `Is_Draw` → `isDrawing`
+- [ ] `Eraser` → `eraser` (大小写一致性)
+- [ ] 每个重命名后编译通过 + grep 验证
+
+### Task F.2: 文档更新
+- [ ] 更新 `CLAUDE.md` 中的架构说明
+- [ ] 更新 `overall_plan.md` 状态为 Completed
+- [ ] 在 plan/ 下记录最终的 state 架构
 
 ---
 
 ## Summary
 
-| Phase | Tasks | Files Modified | New Lines (est.) | Removed Lines (est.) |
-|-------|-------|---------------|------------------|---------------------|
-| **A** | A1-A9 | NrrdTools.ts, coreType.ts, index.ts | ~150 | 0 |
-| **B** | B1-B6 | OperationCtl.vue, Calculator.vue, OperationAdvance.vue, useCaseManagement.ts | ~40 | ~80 |
-| **C** | C1-C4 | NrrdTools.ts, coreType.ts, all Vue components | ~5 | ~30 |
-| **Total** | 19 tasks | 7 files | ~195 | ~110 |
+| Phase | Tasks | Checkboxes | Internal Refs | Risk | Duration |
+|-------|-------|------------|---------------|------|----------|
+| **1: GUI API** | 10 | 52 | 0 (additive) | Low | 2-3 days |
+| **2: Callbacks/Methods** | 7 | 34 | ~42 | Low | 1-2 days |
+| **3: Visibility** | 4 | 16 | ~4 | Low | 1 day |
+| **4: nrrd_states → NrrdState** | 10 | 62 | ~500 | Medium | 1-2 weeks |
+| **5: gui_states → GuiState** | 6 | 30 | ~136 | Medium | 3-5 days |
+| **Final** | 2 | 10 | ~15 | Low | 1 day |
+| **Total** | **39** | **204** | **~697** | | **3-4 weeks** |
 
-**Net effect:** ~85 lines added, but code becomes typed, readable, and properly encapsulated.
+Decision gate after Phase 3: 评估是否继续 Phase 4, 或根据项目优先级推迟。
 
 ---
 

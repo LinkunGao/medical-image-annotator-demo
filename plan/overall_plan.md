@@ -25,7 +25,7 @@ Priority 4 (Deferred)   → State Management (lightweight improvements only)
 | **Tool Extraction - Phase 1** | 75-80% | 🟡 Medium | 🟢 Medium | 1 week | ⭐⭐⭐⭐ | ✅ Completed |
 | **Tool Extraction - Phase 2** | 70-75% | 🟡 Medium | 🟡 Medium | 1-2 weeks | ⭐⭐⭐ | ✅ Completed |
 | **Tool Extraction - Phase 3** | 65-70% | 🟡 Medium-High | 🟡 Medium | 2-3 weeks | ⭐⭐ | ✅ Completed |
-| **State Management Refactor** | 60-65% | 🔴 **High** | 🟡 Medium | 6-8 weeks | ⭐ | **Not Recommended** |
+| **State Management Refactor (Phased)** | 80-85% | 🟡 Low→Medium | 🟢 **High** | 3-4 weeks | ⭐⭐⭐⭐ | **Planned** |
 
 ---
 
@@ -222,174 +222,39 @@ export class DrawToolCore extends CommToolsData {
 
 ---
 
-## ❌ Not Recommended: Full State Management Refactor
+### Priority 5: State Management Refactor (Planned)
 
-### Current State Issues
+**Objective:** Full state reorganization — encapsulate Vue access, extract misplaced callbacks/methods, enforce visibility, split flat state objects into semantic groups.
 
-**Code Statistics:**
-- **738 references** to state objects across 4 files
-- `nrrd_states`: 88 properties (NRRD metadata + UI + tools + callbacks)
-- `gui_states`: 29 properties + 5 methods (mixed concerns)
-- `protectedData`: ~20 properties (unclear responsibility)
+**Audit Results (2026-02-27):**
+- `nrrd_states`: 44 properties, ~500+ internal refs — mixes image metadata, mouse tracking, sphere tool state, 5 callbacks
+- `gui_states`: 30+ properties, ~136 internal refs — mixes tool config, 6 methods(!), internal render flags
+- `protectedData`: 20+ properties, ~398 internal refs — relatively well-structured (canvas/ctx/mask)
+- External violations: only 4 read-only + ~39 via `guiSettings` pattern
+- Total: ~1077 references across ~13 files
 
-**Architectural Problems:**
+**5-Phase Approach (each independently deployable):**
 
-| Issue | Example | Impact |
-|-------|---------|--------|
-| **Mixed Responsibilities** | `nrrd_states` contains: NRRD metadata, UI state, tool config, callbacks | Hard to reason about data flow |
-| **Data Scattering** | Sphere tool state in 3 places: `nrrd_states`, `gui_states`, `protectedData.canvases` | Difficult to track state changes |
-| **Methods in State** | `gui_states` has methods: `clear()`, `undo()`, `resetZoom()` | Violates state/behavior separation |
-| **Naming Inconsistency** | `sizeFoctor` (typo), `Is_Shift_Pressed` (casing), `previousPanelL` (abbreviation) | Reduces readability |
+| Phase | Scope | Risk | Duration |
+|-------|-------|------|----------|
+| 1: GUI API Encapsulation | Vue `guiSettings` → typed NrrdTools methods | 🟢 Low | 2-3 days |
+| 2: Callbacks & Methods Extraction | 5 callbacks out of nrrd_states, 6 methods out of gui_states | 🟢 Low | 1-2 days |
+| 3: Visibility Enforcement | state objects → `protected`, fix 4 external violations | 🟢 Low | 1 day |
+| 4: nrrd_states Semantic Split | 44 props → IImageMetadata, IViewState, IInteractionState, ISphereState, IInternalFlags | 🟡 Medium | 1-2 weeks |
+| 5: gui_states Cleanup | 24 props → IToolModeState, IDrawingConfig, IViewConfig, ILayerChannelState | 🟡 Medium | 3-5 days |
 
-### Why NOT Recommended
+**vs Previous "Not Recommended" Assessment:**
 
-**Risk Analysis:**
-- 🔴 **Massive Impact**: 738 references = almost entire codebase
-- 🔴 **Low Reversibility**: Once started, hard to rollback
-- 🔴 **Testing Burden**: Need to re-test all features
-- 🔴 **Time Sink**: 6-8 weeks of high-risk work
-- 🔴 **Opportunity Cost**: Blocks other improvements
+| | Previous (big-bang) | New (phased) |
+|---|---|---|
+| **Risk** | 🔴 High — all or nothing | 🟡 Low→Medium — each phase independent |
+| **Duration** | 6-8 weeks | 3-4 weeks |
+| **Reversibility** | Low | High — each phase independently reversible |
+| **Migration** | Change all 738 refs at once | Tool-by-tool, file-by-file |
+| **Ship cadence** | Only after everything done | After each phase |
 
-**Benefit Analysis:**
-- 🟡 Improved code clarity
-- 🟡 Easier onboarding for new developers
-- 🟡 Better IDE autocomplete
-- ❌ **No user-visible improvements**
-- ❌ **No performance gains**
-- ❌ **No new features enabled**
-
-**When to Reconsider:**
-Only if **ALL** conditions are met:
-1. ✅ Project in maintenance mode (feature freeze)
-2. ✅ >80% test coverage with E2E tests
-3. ✅ State confusion causing frequent bugs
-4. ✅ Dedicated 6-8 week window
-5. ✅ Team consensus on priority
-
-### Alternative: Lightweight State Improvements
-
-**Option A: Facade Pattern** (1-2 days)
-
-```typescript
-// state/StateManager.ts
-export class StateManager {
-  constructor(
-    private nrrd: INrrdStates,
-    private gui: IGUIStates,
-    private data: IProtected
-  ) {}
-
-  // Semantic grouping - Sphere tool
-  get sphereState() {
-    return {
-      origin: this.nrrd.sphereOrigin,
-      radius: this.nrrd.sphereRadius,
-      enabled: this.gui.sphere,
-      planB: this.nrrd.spherePlanB,
-      tumourOrigin: this.nrrd.tumourSphereOrigin,
-      skinOrigin: this.nrrd.skinSphereOrigin,
-      ribOrigin: this.nrrd.ribSphereOrigin,
-      nippleOrigin: this.nrrd.nippleSphereOrigin,
-    };
-  }
-
-  // Semantic grouping - Interaction
-  get interactionState() {
-    return {
-      isShiftPressed: this.data.Is_Shift_Pressed,
-      isCtrlPressed: this.data.Is_Ctrl_Pressed,
-      isDrawing: this.data.Is_Draw,
-      cursorChooseEnabled: this.nrrd.enableCursorChoose,
-      mouseOver: this.nrrd.Mouse_Over,
-    };
-  }
-
-  // Semantic grouping - View
-  get viewState() {
-    return {
-      currentSlice: this.nrrd.currentIndex,
-      axis: this.data.axis,
-      zoom: this.nrrd.sizeFoctor,
-      contrast: this.nrrd.contrastNum,
-      dimensions: {
-        width: this.nrrd.changedWidth,
-        height: this.nrrd.changedHeight,
-      },
-    };
-  }
-
-  // Semantic grouping - Drawing tool
-  get drawingToolState() {
-    return {
-      activeTool: this.gui.Eraser ? 'eraser' :
-                   this.gui.sphere ? 'sphere' :
-                   this.gui.calculator ? 'calculator' : 'pencil',
-      brushSize: this.gui.brushAndEraserSize,
-      color: this.gui.brushColor,
-      layer: this.gui.layer,
-    };
-  }
-}
-
-// Usage in tools:
-const state = new StateManager(this.nrrd_states, this.gui_states, this.protectedData);
-
-if (state.sphereState.enabled) {
-  drawSphere(state.sphereState.origin, state.sphereState.radius);
-}
-
-if (state.interactionState.isShiftPressed && !state.interactionState.cursorChooseEnabled) {
-  startDrawing();
-}
-```
-
-**Benefits:**
-- ✅ Zero risk (doesn't modify existing state)
-- ✅ New code uses semantic interface
-- ✅ Gradual migration (existing 738 refs still work)
-- ✅ 1-2 days work vs 6-8 weeks
-
-**Option B: TypeScript Type Aliases** (1 day)
-
-```typescript
-// state/StateTypes.ts
-export type ImageMetadata = Pick<INrrdStates,
-  'originWidth' | 'originHeight' | 'dimensions' | 'voxelSpacing' | 'spaceOrigin'>;
-
-export type ViewState = Pick<INrrdStates,
-  'currentIndex' | 'contrastNum' | 'changedWidth' | 'changedHeight'> &
-  Pick<IProtected, 'axis'>;
-
-export type SphereToolState = Pick<INrrdStates,
-  'sphereOrigin' | 'sphereRadius' | 'spherePlanB' |
-  'tumourSphereOrigin' | 'skinSphereOrigin' | 'ribSphereOrigin' | 'nippleSphereOrigin'> &
-  Pick<IGUIStates, 'sphere' | 'calculator' | 'activeSphereType'>;
-
-export type InteractionState = Pick<IProtected,
-  'Is_Shift_Pressed' | 'Is_Ctrl_Pressed' | 'Is_Draw'> &
-  Pick<INrrdStates, 'enableCursorChoose' | 'Mouse_Over'>;
-
-export type DrawingToolConfig = Pick<IGUIStates,
-  'Eraser' | 'brushAndEraserSize' | 'color' | 'brushColor' | 'lineWidth' | 'layer'>;
-
-// Usage: Type constraints enforce correct state usage
-function updateSpherePosition(
-  sphere: SphereToolState,
-  view: ViewState
-): void {
-  // TypeScript provides autocomplete for grouped properties
-  const origin = sphere.sphereOrigin[view.axis];
-  // ...
-}
-```
-
-**Benefits:**
-- ✅ Zero runtime cost
-- ✅ Better IDE support
-- ✅ Documents state groupings via types
-- ✅ 1 day work
-
-**Recommendation:** Use Option A (Facade) if state access becomes painful during mask migration or tool extraction. Otherwise, defer indefinitely.
+**Detailed Plan:** [gui_state_api_refactor_plan.md](gui_state_api_refactor_plan.md)
+**Task List:** [gui_state_api_refactor_task.md](gui_state_api_refactor_task.md)
 
 ---
 
@@ -665,4 +530,4 @@ function updateSpherePosition(
 **Last Updated:** 2026-02-27
 **Next Review:** N/A — All planned phases complete
 **Owner:** Development Team
-**Status:** ✅ All Tool Extraction Phases (1-2-3) and Mask Storage Migration Complete. State Management Refactor remains Not Recommended.
+**Status:** ✅ Mask Storage Migration + Tool Extraction Phase 1-2-3 complete. State Management Refactor (5-phase) planned.

@@ -302,7 +302,7 @@ const handleAllImagesLoaded = async (res: IToolAfterLoadImagesResponse) => {
       ],
       getVoxelSpacing: () => states.voxelSpacing,
       getSpaceOrigin: () => states.spaceOrigin,
-      getCurrentSliceIndex: () => states.currentIndex,
+      getCurrentSliceIndex: () => states.currentSliceIndex,
       getCurrentAxis: () => states.axis,
       getSizeFactor: () => states.sizeFactor,
       getGlobalAlpha: () => states.globalAlpha,

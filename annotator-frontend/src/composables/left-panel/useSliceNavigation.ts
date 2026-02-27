@@ -43,9 +43,9 @@ export function useSliceNavigation(deps: ISliceNavigationDeps) {
     const resetSlicesOrientation = (axis: "x" | "y" | "z") => {
         nrrdTools.value!.setSliceOrientation(axis);
         max.value = nrrdTools.value!.getMaxSliceNum()[1];
-        const { currentIndex, contrastIndex } =
+        const { currentSliceIndex, contrastIndex } =
             nrrdTools.value!.getCurrentSlicesNumAndContrastNum();
-        immediateSliceNum.value = currentIndex;
+        immediateSliceNum.value = currentSliceIndex;
         contrastNum.value = contrastIndex;
     };
 
@@ -86,9 +86,9 @@ export function useSliceNavigation(deps: ISliceNavigationDeps) {
         const maxNum = nrrdTools.value!.getMaxSliceNum()[1];
         if (maxNum) {
             max.value = maxNum;
-            const { currentIndex, contrastIndex } =
+            const { currentSliceIndex, contrastIndex } =
                 nrrdTools.value!.getCurrentSlicesNumAndContrastNum();
-            immediateSliceNum.value = currentIndex;
+            immediateSliceNum.value = currentSliceIndex;
             contrastNum.value = contrastIndex + 1;
         }
     };
@@ -97,9 +97,9 @@ export function useSliceNavigation(deps: ISliceNavigationDeps) {
      * Updates navigation state after images loaded
      */
     const updateNavigationAfterLoad = () => {
-        const currentIndex = nrrdTools.value!.getCurrentSliceIndex();
-        initSliceIndex.value = currentIndex;
-        immediateSliceNum.value = currentIndex;  // Set immediateSliceNum for slider
+        const currentSliceIndex = nrrdTools.value!.getCurrentSliceIndex();
+        initSliceIndex.value = currentSliceIndex;
+        immediateSliceNum.value = currentSliceIndex;  // Set immediateSliceNum for slider
         max.value = nrrdTools.value!.getMaxSliceNum()[1];
     };
 

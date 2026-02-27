@@ -71,7 +71,7 @@ export class DragSliceTool extends BaseTool {
       contrastModifyNum = move % this.ctx.protectedData.displaySlices.length;
       nrrd.contrastNum += contrastModifyNum;
       if (move > 0) {
-        if (nrrd.currentIndex <= nrrd.maxIndex) {
+        if (nrrd.currentSliceIndex <= nrrd.maxIndex) {
           sliceModifyNum = Math.floor(
             move / this.ctx.protectedData.displaySlices.length
           );
@@ -95,9 +95,9 @@ export class DragSliceTool extends BaseTool {
       sliceModifyNum = move;
     }
 
-    let newIndex = nrrd.currentIndex + sliceModifyNum;
+    let newIndex = nrrd.currentSliceIndex + sliceModifyNum;
 
-    if (newIndex != nrrd.currentIndex || nrrd.showContrast) {
+    if (newIndex != nrrd.currentSliceIndex || nrrd.showContrast) {
       if (newIndex > nrrd.maxIndex) {
         newIndex = nrrd.maxIndex;
         nrrd.contrastNum = this.ctx.protectedData.displaySlices.length - 1;
@@ -109,7 +109,7 @@ export class DragSliceTool extends BaseTool {
         this.callbacks.setSyncsliceNum();
 
         let isSameIndex = true;
-        if (newIndex != nrrd.currentIndex) {
+        if (newIndex != nrrd.currentSliceIndex) {
           nrrd.switchSliceFlag = true;
           isSameIndex = false;
         }
@@ -123,7 +123,7 @@ export class DragSliceTool extends BaseTool {
 
         const needToUpdateSlice = this.updateCurrentContrastSlice();
         needToUpdateSlice.repaint.call(needToUpdateSlice);
-        nrrd.currentIndex = newIndex;
+        nrrd.currentSliceIndex = newIndex;
         this.drawDragSlice(needToUpdateSlice.canvas);
       }
 
@@ -155,7 +155,7 @@ export class DragSliceTool extends BaseTool {
     if (nrrd.switchSliceFlag) {
       if (!this.ctx.gui_states.sphere) {
         const axis = this.ctx.protectedData.axis;
-        const sliceIndex = nrrd.currentIndex;
+        const sliceIndex = nrrd.currentSliceIndex;
 
         // Get a single reusable buffer — shared across all layer renders
         const buffer = this.callbacks.getOrCreateSliceBuffer(axis);
@@ -226,15 +226,15 @@ export class DragSliceTool extends BaseTool {
   updateShowNumDiv(contrastNum: number): void {
     if (this.ctx.protectedData.mainPreSlices) {
       const nrrd = this.ctx.nrrd_states;
-      if (nrrd.currentIndex > nrrd.maxIndex) {
-        nrrd.currentIndex = nrrd.maxIndex;
+      if (nrrd.currentSliceIndex > nrrd.maxIndex) {
+        nrrd.currentSliceIndex = nrrd.maxIndex;
       }
       if (nrrd.showContrast) {
         this.showDragNumberDiv.innerHTML = `ContrastNum: ${contrastNum}/${
           this.ctx.protectedData.displaySlices.length - 1
-        } SliceNum: ${nrrd.currentIndex}/${nrrd.maxIndex}`;
+        } SliceNum: ${nrrd.currentSliceIndex}/${nrrd.maxIndex}`;
       } else {
-        this.showDragNumberDiv.innerHTML = `SliceNum: ${nrrd.currentIndex}/${nrrd.maxIndex}`;
+        this.showDragNumberDiv.innerHTML = `SliceNum: ${nrrd.currentSliceIndex}/${nrrd.maxIndex}`;
       }
     }
   }

@@ -808,7 +808,7 @@ export class NrrdTools extends DrawToolCore {
     this.nrrd_states.sphereRadius = 5;
 
     // move to tumour slice
-    const steps = sliceIndex - this.nrrd_states.currentIndex;
+    const steps = sliceIndex - this.nrrd_states.currentSliceIndex;
     this.setSliceMoving(steps * this.protectedData.displaySlices.length)
 
     // mock mouse down
@@ -827,15 +827,15 @@ export class NrrdTools extends DrawToolCore {
     let convetObj;
     if (this.eventRouter?.isCrosshairEnabled() || this.gui_states.sphere) {
       if (this.protectedData.axis === "z") {
-        this.cursorPage.z.index = this.nrrd_states.currentIndex;
+        this.cursorPage.z.index = this.nrrd_states.currentSliceIndex;
         this.cursorPage.z.cursorPageX = this.nrrd_states.cursorPageX;
         this.cursorPage.z.cursorPageY = this.nrrd_states.cursorPageY;
       } else if (this.protectedData.axis === "x") {
-        this.cursorPage.x.index = this.nrrd_states.currentIndex;
+        this.cursorPage.x.index = this.nrrd_states.currentSliceIndex;
         this.cursorPage.x.cursorPageX = this.nrrd_states.cursorPageX;
         this.cursorPage.x.cursorPageY = this.nrrd_states.cursorPageY;
       } else if (this.protectedData.axis === "y") {
-        this.cursorPage.y.index = this.nrrd_states.currentIndex;
+        this.cursorPage.y.index = this.nrrd_states.currentSliceIndex;
         this.cursorPage.y.cursorPageX = this.nrrd_states.cursorPageX;
         this.cursorPage.y.cursorPageY = this.nrrd_states.cursorPageY;
       }
@@ -863,7 +863,7 @@ export class NrrdTools extends DrawToolCore {
           }
         } else {
           // not cursor select, freedom to switch x -> z or y -> z and z -> x or z -> y
-          this.nrrd_states.currentIndex = this.cursorPage.z.index;
+          this.nrrd_states.currentSliceIndex = this.cursorPage.z.index;
           this.nrrd_states.preSliceIndex =
             this.cursorPage.z.index * this.nrrd_states.ratios.z;
           this.nrrd_states.cursorPageX = this.cursorPage.z.cursorPageX;
@@ -895,7 +895,7 @@ export class NrrdTools extends DrawToolCore {
           }
         } else {
           // not cursor select, freedom to switch z -> x or y -> x and x -> z or x -> y
-          this.nrrd_states.currentIndex = this.cursorPage.x.index;
+          this.nrrd_states.currentSliceIndex = this.cursorPage.x.index;
           this.nrrd_states.preSliceIndex =
             this.cursorPage.x.index * this.nrrd_states.ratios.x;
           this.nrrd_states.cursorPageX = this.cursorPage.x.cursorPageX;
@@ -925,7 +925,7 @@ export class NrrdTools extends DrawToolCore {
           }
         } else {
           // not cursor select, freedom to switch z -> y or x -> y and y -> z or y -> x
-          this.nrrd_states.currentIndex = this.cursorPage.y.index;
+          this.nrrd_states.currentSliceIndex = this.cursorPage.y.index;
           this.nrrd_states.preSliceIndex =
             this.cursorPage.y.index * this.nrrd_states.ratios.y;
           this.nrrd_states.cursorPageX = this.cursorPage.y.cursorPageX;
@@ -935,7 +935,7 @@ export class NrrdTools extends DrawToolCore {
 
       if (convetObj) {
         // update convert cursor point, when cursor select
-        this.nrrd_states.currentIndex = convetObj.currentNewSliceIndex;
+        this.nrrd_states.currentSliceIndex = convetObj.currentNewSliceIndex;
         this.nrrd_states.preSliceIndex = convetObj.preSliceIndex;
         this.nrrd_states.cursorPageX = convetObj.convertCursorNumX;
         this.nrrd_states.cursorPageY = convetObj.convertCursorNumY;
@@ -1098,7 +1098,7 @@ export class NrrdTools extends DrawToolCore {
   }
   getCurrentSlicesNumAndContrastNum() {
     return {
-      currentIndex: this.nrrd_states.currentIndex,
+      currentSliceIndex: this.nrrd_states.currentSliceIndex,
       contrastIndex: this.nrrd_states.contrastNum,
     };
   }
@@ -1211,7 +1211,7 @@ export class NrrdTools extends DrawToolCore {
         this.nrrd_states.preSliceIndex =
           this.protectedData.mainPreSlices.initIndex *
           this.nrrd_states.RSARatio;
-        this.nrrd_states.currentIndex =
+        this.nrrd_states.currentSliceIndex =
           this.protectedData.mainPreSlices.initIndex;
       } else {
         // !need to change
@@ -1232,7 +1232,7 @@ export class NrrdTools extends DrawToolCore {
     this.protectedData.currentShowingSlice = this.protectedData.mainPreSlices;
     this.nrrd_states.preSliceIndex =
       this.protectedData.mainPreSlices.initIndex * this.nrrd_states.RSARatio;
-    this.nrrd_states.currentIndex = this.protectedData.mainPreSlices.initIndex;
+    this.nrrd_states.currentSliceIndex = this.protectedData.mainPreSlices.initIndex;
     // Phase 6: Reset undo/redo stacks on new dataset load
     this.undoManager.clearAll();
 
@@ -1496,10 +1496,10 @@ export class NrrdTools extends DrawToolCore {
     }
 
     const axis = this.protectedData.axis;
-    let sliceIndex = this.nrrd_states.currentIndex;
+    let sliceIndex = this.nrrd_states.currentSliceIndex;
 
     // Clamp sliceIndex to valid range for current axis
-    // (currentIndex may not be updated yet when switching axes)
+    // (currentSliceIndex may not be updated yet when switching axes)
     try {
       const vol = this.getVolumeForLayer(this.nrrd_states.layers[0]);
       const dims = vol.getDimensions();

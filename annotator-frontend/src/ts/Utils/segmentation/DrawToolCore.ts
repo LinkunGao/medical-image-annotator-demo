@@ -661,9 +661,9 @@ export class DrawToolCore extends CommToolsData {
     this.nrrd_states.sphereOrigin[this.protectedData.axis] = [
       mouseX,
       mouseY,
-      this.nrrd_states.currentIndex,
+      this.nrrd_states.currentSliceIndex,
     ];
-    this.setUpSphereOrigins(mouseX, mouseY, this.nrrd_states.currentIndex);
+    this.setUpSphereOrigins(mouseX, mouseY, this.nrrd_states.currentSliceIndex);
 
     // Store origin for the active sphere type
     const calPos = this.gui_states.activeSphereType;
@@ -883,7 +883,7 @@ export class DrawToolCore extends CommToolsData {
     // Clear only the active layer's MaskVolume slice and record undo delta
     try {
       const axis = this.protectedData.axis;
-      const idx = this.nrrd_states.currentIndex;
+      const idx = this.nrrd_states.currentSliceIndex;
       const activeLayer = this.gui_states.layer;
       const vol = this.getVolumeForLayer(activeLayer);
 
@@ -933,7 +933,7 @@ export class DrawToolCore extends CommToolsData {
         const target = this.protectedData.layerTargets.get(layerId);
         if (!target) continue;
         target.ctx.clearRect(0, 0, w, h);
-        this.renderSliceToCanvas(layerId, this.protectedData.axis, this.nrrd_states.currentIndex, buffer, target.ctx, w, h);
+        this.renderSliceToCanvas(layerId, this.protectedData.axis, this.nrrd_states.currentSliceIndex, buffer, target.ctx, w, h);
       }
     }
     this.compositeAllLayers();
@@ -959,7 +959,7 @@ export class DrawToolCore extends CommToolsData {
 
     this.protectedData.Is_Draw = true;
 
-    if (delta.axis === this.protectedData.axis && delta.sliceIndex === this.nrrd_states.currentIndex) {
+    if (delta.axis === this.protectedData.axis && delta.sliceIndex === this.nrrd_states.currentSliceIndex) {
       this.applyUndoRedoToCanvas(delta.layerId);
     }
 
@@ -993,7 +993,7 @@ export class DrawToolCore extends CommToolsData {
 
     this.protectedData.Is_Draw = true;
 
-    if (delta.axis === this.protectedData.axis && delta.sliceIndex === this.nrrd_states.currentIndex) {
+    if (delta.axis === this.protectedData.axis && delta.sliceIndex === this.nrrd_states.currentSliceIndex) {
       this.applyUndoRedoToCanvas(delta.layerId);
     }
 
@@ -1028,7 +1028,7 @@ export class DrawToolCore extends CommToolsData {
       this.renderSliceToCanvas(
         layerId,
         this.protectedData.axis,
-        this.nrrd_states.currentIndex,
+        this.nrrd_states.currentSliceIndex,
         buffer,
         ctx,
         this.nrrd_states.changedWidth,

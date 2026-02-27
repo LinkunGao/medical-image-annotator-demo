@@ -136,7 +136,7 @@ git checkout HEAD -- \
     - [x] getDimensions() → `[nrrd_x_pixel, nrrd_y_pixel, nrrd_z_pixel]`
     - [x] getVoxelSpacing() → `states.voxelSpacing`
     - [x] getSpaceOrigin() → `states.spaceOrigin`
-    - [x] getCurrentSliceIndex() → `states.currentIndex`
+    - [x] getCurrentSliceIndex() → `states.currentSliceIndex`
     - [x] getCurrentAxis() → `nrrd.protectedData.axis` (注意: axis 在 IProtected 中)
     - [x] getSizeFactor() → `states.sizeFoctor` (注意: 原始代码有拼写错误)
     - [x] getGlobalAlpha() → `nrrd.gui_states.globalAlpha`

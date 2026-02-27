@@ -49,7 +49,7 @@ export class CommToolsData {
     changedWidth: 0,
     changedHeight: 0,
     preSliceIndex: 0,
-    currentIndex: 0,
+    currentSliceIndex: 0,
     maxIndex: 0,
     minIndex: 0,
     RSARatio: 0,
@@ -161,7 +161,7 @@ export class CommToolsData {
     downloadCurrentMask: () => {
       const config: IDownloadImageConfig = {
         axis: this.protectedData.axis,
-        currentIndex: this.nrrd_states.currentIndex,
+        currentSliceIndex: this.nrrd_states.currentSliceIndex,
         drawingCanvas: this.protectedData.canvases.drawingCanvas,
         originWidth: this.nrrd_states.originWidth,
         originHeight: this.nrrd_states.originHeight,

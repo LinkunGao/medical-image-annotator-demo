@@ -154,7 +154,7 @@ export class DrawingTool extends BaseTool {
     }
 
     this.callbacks.syncLayerSliceData(
-      this.ctx.nrrd_states.currentIndex,
+      this.ctx.nrrd_states.currentSliceIndex,
       this.ctx.gui_states.layer
     );
 
@@ -183,7 +183,7 @@ export class DrawingTool extends BaseTool {
   private capturePreDrawSnapshot(): void {
     try {
       this.preDrawAxis = this.ctx.protectedData.axis;
-      this.preDrawSliceIndex = this.ctx.nrrd_states.currentIndex;
+      this.preDrawSliceIndex = this.ctx.nrrd_states.currentSliceIndex;
       const vol = this.callbacks.getVolumeForLayer(this.ctx.gui_states.layer);
       this.preDrawSlice = vol.getSliceUint8(this.preDrawSliceIndex, this.preDrawAxis).data.slice();
     } catch {
@@ -218,7 +218,7 @@ export class DrawingTool extends BaseTool {
   private redrawPreviousImageToLayerCtx(ctx: CanvasRenderingContext2D): void {
     const tempPreImg = this.callbacks.filterDrawedImage(
       this.ctx.protectedData.axis,
-      this.ctx.nrrd_states.currentIndex,
+      this.ctx.nrrd_states.currentSliceIndex,
     )?.image;
     this.ctx.protectedData.canvases.emptyCanvas.width =
       this.ctx.protectedData.canvases.emptyCanvas.width;

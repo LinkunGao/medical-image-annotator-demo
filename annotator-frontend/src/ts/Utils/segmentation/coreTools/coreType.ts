@@ -13,7 +13,7 @@ interface ISkipSlicesDictType {
 
 interface IDownloadImageConfig {
   axis: "x" | "y" | "z";
-  currentIndex: number;
+  currentSliceIndex: number;
   drawingCanvas: HTMLCanvasElement;
   originWidth: number;
   originHeight: number;
@@ -196,7 +196,7 @@ interface INrrdStates {
   changedWidth: number;
   changedHeight: number;
   preSliceIndex: number;
-  currentIndex: number;
+  currentSliceIndex: number;
   maxIndex: number;
   minIndex: number;
   RSARatio: number;

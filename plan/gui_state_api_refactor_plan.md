@@ -1,364 +1,588 @@
-# GUI State API Refactor Plan
+# State Management Refactor Plan
 
 > **Status:** Planning
 > **Prerequisites:** Tool Extraction Phase 1-2-3 (COMPLETED)
-> **Scope:** Encapsulate gui state mutations behind NrrdTools typed methods; eliminate direct `guiSettings.guiState[key]` / `guiSetting[key].onChange()` access from Vue components
-> **Estimated Duration:** 2-3 days
-> **Risk:** Low — public API additions, no internal restructuring
+> **Scope:** Full state reorganization — encapsulate Vue access, extract misplaced callbacks/methods, enforce visibility, split flat state objects into semantic groups
+> **Estimated Duration:** 3-4 weeks (5 phases)
+> **Risk:** Phase 1-3 Low, Phase 4-5 Medium
 
 ---
 
 ## 1. Problem Statement
 
-### 1.1 Current Architecture (Broken Abstraction)
+### 1.1 The Three State Objects Today
 
 ```
-Vue Component
-  │
-  ├─→ guiSettings.value.guiState["sphere"] = true        // 1. Raw state mutation
-  ├─→ guiSettings.value.guiSetting["sphere"].onChange()   // 2. Manually trigger side-effect
-  │
-  └─  (two separate steps that MUST be kept in sync by the caller)
+nrrd_states (44 properties)     gui_states (30+ properties)     protectedData (20+ properties)
+├─ Image metadata               ├─ Tool config                  ├─ DOM references
+├─ Mouse tracking state         ├─ Drawing colors               ├─ Canvas elements
+├─ Sphere tool state            ├─ Mode flags                   ├─ Canvas contexts
+├─ View runtime state           ├─ 6 METHOD functions(!)        ├─ Slice data arrays
+├─ Clear/loading flags          ├─ Layer/channel visibility      ├─ Mask volumes
+├─ 5 CALLBACK functions(!)      └─ Internal render flags         └─ Axis + Is_Draw
+└─ Layer config
 ```
 
-`getGuiSettings()` in NrrdTools.ts:155 returns **raw internal references**:
-```typescript
-return {
-  guiState: this.gui_states,            // direct reference to IGUIStates
-  guiSetting: this.guiParameterSettings // closure-bound callbacks from gui.ts
-};
-```
+**Core problems:**
 
-Vue components then:
-1. **Mutate** `guiState[key]` via untyped string indexing — no type safety, no validation
-2. **Manually call** `guiSetting[key].onChange()` — closure callbacks that were designed for `dat.gui`, not as a public API
-3. **Manage state transitions themselves** — OperationCtl.vue:260-299 contains 15+ lines of mode-switching logic that should live in NrrdTools
+1. **Mixed responsibilities** — `nrrd_states` 里图像元数据（`voxelSpacing`）、鼠标追踪（`Mouse_Over_x`）、Sphere工具状态（`sphereOrigin`）、回调函数（`getMask`）全混在一个扁平对象里
 
-### 1.2 Why This Is Problematic
+2. **Callbacks in state** — `nrrd_states` 包含 5 个回调（`getMask`, `getSphere`, `getCalculateSpherePositions`, `onClearLayerVolume`, `onChannelColorChanged`），这些应该是事件接口
 
-| Issue | Example | Impact |
-|-------|---------|--------|
-| **Separated mutation & side-effect** | Set `guiState["sphere"]=true`, then must call `guiSetting["sphere"].onChange()` | If caller forgets step 2, app enters inconsistent state silently |
-| **No type safety** | `guiSettings.value.guiState[commSliderRadios.value]` — dynamic string key | TypeScript can't catch invalid keys at build time |
-| **Leaked internals** | `guiSetting["pencil"].onChange` is a closure over `configs.drawingCanvas` | UI knows about gui.ts's closure structure |
-| **Duplicated logic** | Mode-switching logic repeated in OperationCtl.vue (15+ lines) | Same transitions reimplemented in every consumer |
-| **Poor readability** | `guiSettings.value.guiSetting[type].value.windowHigh` | New developers can't understand the data flow |
-| **Existing API unused** | `nrrdTools.setActiveSphereType()` exists but Calculator.vue doesn't use it | API was created but adoption never happened |
+3. **Methods in state** — `gui_states` 包含 6 个方法（`clear()`, `clearAll()`, `undo()`, `redo()`, `downloadCurrentMask()`, `resetZoom()`），违反 state/behavior 分离
 
-### 1.3 Affected Files
+4. **Internal details exposed** — `Mouse_Over_x/y`, `stepClear`, `sphereMaskVolume`, `loadingMaskData`, `previousPanelL/T` 等纯内部状态通过 public `nrrd_states` 暴露给所有代码
 
-| File | `guiSettings` Usages | Role |
-|------|---------------------|------|
-| `OperationCtl.vue` | **24** usages | Mode switching, sliders, buttons |
-| `Calculator.vue` | **9** usages | Sphere type selection |
-| `OperationAdvance.vue` | **5** usages | Color picker |
-| `useCaseManagement.ts` | **1** usage | Calls `getGuiSettings()` and emits to components |
+5. **GUI access pattern broken** — Vue 组件通过 `guiSettings.value.guiState[key]` 直接改状态 + 手动调 `guiSetting[key].onChange()` 闭包回调
 
-**Total: ~39 usages** of `guiSettings.value.*` across 4 files.
+### 1.2 Reference Count Summary
+
+| State Object | Internal Refs | External Refs | Total |
+|---|---|---|---|
+| `nrrd_states` | ~500+ | 4 (read-only) | ~504 |
+| `gui_states` | ~136 | ~39 (via guiSettings) | ~175 |
+| `protectedData` | ~398 | 0 | ~398 |
+| **Total** | **~1034** | **~43** | **~1077** |
+
+### 1.3 nrrd_states Property Audit
+
+| 类别 | 属性 | 引用数 | 应该属于 |
+|------|------|-------|---------|
+| **图像元数据** | `originWidth/Height`, `nrrd_x/y/z_mm`, `nrrd_x/y/z_pixel`, `dimensions`, `voxelSpacing`, `spaceOrigin`, `RSARatio`, `ratios` | ~120 | `IImageMetadata` — 加载后不变 |
+| **视图运行时** | `changedWidth/Height`, `currentSliceIndex`, `preSliceIndex`, `maxIndex`, `minIndex`, `contrastNum`, `sizeFoctor`, `showContrast`, `previousPanelL/T`, `switchSliceFlag` | ~165 | `IViewState` — 内部，频繁变化 |
+| **交互状态** | `Mouse_Over_x/y`, `Mouse_Over`, `cursorPageX/Y`, `isCursorSelect`, `drawStartPos` | ~45 | `IInteractionState` — 内部 |
+| **Sphere工具** | `sphereOrigin`, `tumour/skin/rib/nippleSphereOrigin`, `sphereMaskVolume`, `sphereRadius` | ~145 | `ISphereState` — SphereTool 内部 |
+| **杂项标志** | `stepClear`, `clearAllFlag`, `loadingMaskData` | ~19 | 各自工具的内部状态 |
+| **配置** | `layers` | ~15 | 构造参数/只读配置 |
+| **回调(!)** | `getMask`, `getSphere`, `getCalculateSpherePositions`, `onClearLayerVolume`, `onChannelColorChanged` | ~30 | `IAnnotationCallbacks` 接口 |
+
+### 1.4 gui_states Property Audit
+
+| 类别 | 属性 | 引用数 | 问题 |
+|------|------|-------|------|
+| **工具模式** | `Eraser`, `pencil`, `sphere` | ~34 | OK but should be enum |
+| **绘图配置** | `globalAlpha`, `lineWidth`, `color`, `fillColor`, `brushColor`, `brushAndEraserSize` | ~27 | OK, 应通过方法设置 |
+| **视图配置** | `mainAreaSize`, `dragSensitivity`, `cursor`, `defaultPaintCursor`, `max_sensitive` | ~15 | `defaultPaintCursor`, `max_sensitive` 应该内部 |
+| **Layer/Channel** | `layer`, `activeChannel`, `activeSphereType`, `layerVisibility`, `channelVisibility` | ~56 | OK, 已有部分方法 |
+| **内部标志** | `readyToUpdate` | ~11 | 纯内部渲染标志 |
+| **方法(!)** | `clear()`, `clearAll()`, `undo()`, `redo()`, `downloadCurrentMask()`, `resetZoom()` | — | **应该是 NrrdTools 方法** |
 
 ---
 
-## 2. Target Architecture
-
-### 2.1 New Pattern
+## 2. Phased Refactor Strategy
 
 ```
-Vue Component
-  │
-  └─→ nrrdTools.setMode("eraser")    // Single typed call → NrrdTools handles state + side-effects
+Phase 1 (2-3 days)  → GUI API Encapsulation         [Low Risk]
+Phase 2 (1-2 days)  → Callbacks & Methods Extraction [Low Risk]
+Phase 3 (1 day)     → Visibility Enforcement         [Low Risk]
+Phase 4 (1-2 weeks) → nrrd_states Semantic Split     [Medium Risk]
+Phase 5 (3-5 days)  → gui_states Cleanup             [Medium Risk]
 ```
 
-Vue components call **typed NrrdTools methods**. Each method:
-1. Updates `gui_states` properties atomically
-2. Triggers the appropriate side-effect (currently in `guiSetting[key].onChange()`)
-3. Is strongly typed with full IDE autocomplete
-
-### 2.2 Separation of Concerns
-
-```
-guiSettings return object:
-  BEFORE: { guiState: live state, guiSetting: metadata + callbacks }
-  AFTER:  { guiState: read-only snapshot, guiMeta: metadata only (min/max/step/name) }
-                                            ↑ NO callbacks exposed
-```
-
-- **NrrdTools**: owns all state mutations + side-effects (the "write" path)
-- **guiSettings**: provides metadata (min/max/step) + read-only state (the "read" path for UI rendering)
-- **gui.ts**: remains internal — its closures are called only by NrrdTools, never by Vue
+Each phase is independently deployable and testable.
 
 ---
 
-## 3. New NrrdTools Public API Design
+## 3. Phase 1: GUI API Encapsulation (2-3 days)
 
-### 3.1 Mode Switching
+### Goal
+Eliminate all `guiSettings.value.guiState[key]` and `guiSettings.value.guiSetting[key].onChange()` patterns from Vue components. Replace with typed NrrdTools methods.
+
+### New NrrdTools API
 
 ```typescript
 type ToolMode = "pencil" | "brush" | "eraser" | "sphere" | "calculator";
 
-/**
- * Switch the active drawing mode.
- * Handles all state transitions: deactivates previous mode, activates new mode,
- * updates cursor, manages event listeners.
- */
+// Mode switching (replaces 15+ lines in OperationCtl.vue:260-299)
 setMode(mode: ToolMode): void;
-
-/**
- * Get the currently active mode.
- */
 getMode(): ToolMode;
-```
 
-**Replaces in OperationCtl.vue (lines 260-299):**
-```typescript
-// BEFORE: 15+ lines of manual state management
-guiSettings.value.guiState["calculator"] = true;
-guiSettings.value.guiState["sphere"] = false;
-// ... 10+ more lines ...
-guiSettings.value.guiSetting[commFuncRadios.value].onChange();
-
-// AFTER: one call
-nrrdTools.setMode("calculator");
-```
-
-### 3.2 Slider Properties
-
-```typescript
-/** Set mask opacity (0.1 – 1.0) */
+// Slider properties (replaces guiState[key]=val + guiSetting[key].onChange())
 setOpacity(value: number): void;
 getOpacity(): number;
-
-/** Set brush/eraser size (5 – 50) */
 setBrushSize(size: number): void;
 getBrushSize(): number;
-
-/** Set image contrast window high, with optional finish flag */
 setWindowHigh(value: number): void;
-finishWindowAdjustment(): void;
-
-/** Set image contrast window low */
 setWindowLow(value: number): void;
+finishWindowAdjustment(): void;
+adjustContrast(type: "windowHigh" | "windowLow", delta: number): void;
 
-/** Get slider metadata for UI rendering */
-getSliderMeta(key: "globalAlpha" | "brushAndEraserSize" | "windowHigh" | "windowLow"): {
-  min: number; max: number; step: number; currentValue: number;
-};
-```
+// Metadata for UI rendering (replaces guiSetting[key].min/max/step)
+getSliderMeta(key: string): { min: number; max: number; step: number; value: number };
 
-**Replaces in OperationCtl.vue (lines 307-328):**
-```typescript
-// BEFORE:
-guiSettings.value.guiState[commSliderRadios.value] = val;
-guiSettings.value.guiSetting[commSliderRadios.value].onChange();
-// ... special cases for windowHigh/windowLow ...
-guiSettings.value.guiSetting[commSliderRadios.value].onFinished();
-
-// AFTER:
-nrrdTools.setBrushSize(val);     // or setOpacity(val), setWindowHigh(val)
-nrrdTools.finishWindowAdjustment();  // called on slider release
-```
-
-### 3.3 Sphere Type (Already Exists — Just Need Adoption)
-
-```typescript
-// Already exists at NrrdTools.ts:196
-setActiveSphereType(type: SphereType): void;
-```
-
-**Need to add:** side-effect (color update) that currently lives in `guiSetting["activeSphereType"].onChange()`.
-
-**Replaces in Calculator.vue (lines 176-188):**
-```typescript
-// BEFORE:
-guiSettings.value.guiState["activeSphereType"] = "skin";
-guiSettings.value.guiSetting["activeSphereType"].onChange(calculatorPickerRadios.value);
-
-// AFTER:
-nrrdTools.setActiveSphereType("skin");  // includes color update side-effect
-```
-
-### 3.4 Button Actions
-
-```typescript
-/** These already exist as gui_states methods, just need exposure */
-clearActiveSlice(): void;   // gui_states.clear()
-clearAllSlices(): void;     // gui_states.clearAll()
-undo(): void;               // Already exists at NrrdTools.ts:453
-redo(): void;               // Already exists at NrrdTools.ts:469
-resetZoom(): void;          // gui_states.resetZoom()
-```
-
-**Replaces in OperationCtl.vue (line 364):**
-```typescript
-// BEFORE:
-guiSettings.value.guiState[val].call();
-
-// AFTER:
-nrrdTools[val as "undo" | "redo" | "resetZoom"]();  // or a dispatch method
-```
-
-### 3.5 Color Properties
-
-```typescript
-/** Set pencil stroke color */
+// Color (replaces guiState.color = x)
 setPencilColor(hex: string): void;
 getPencilColor(): string;
+
+// Button dispatch (replaces guiState[val].call())
+executeAction(action: "undo" | "redo" | "clear" | "clearAll" | "resetZoom"): void;
 ```
 
-**Replaces in OperationAdvance.vue (line 201):**
+### Files Changed
+
+| File | Changes | Impact |
+|------|---------|--------|
+| `NrrdTools.ts` | Add ~10 public methods | +~100 lines |
+| `OperationCtl.vue` | 24 usages → nrrdTools.* calls | −~60 lines |
+| `Calculator.vue` | 9 usages → nrrdTools.* calls | −~15 lines |
+| `OperationAdvance.vue` | 5 usages → nrrdTools.* calls | −~8 lines |
+| `coreType.ts` | Add `ToolMode`, `IGuiMeta` types | +~10 lines |
+
+### Risk: LOW
+Additive API — old pattern still works until fully migrated.
+
+---
+
+## 4. Phase 2: Callbacks & Methods Extraction (1-2 days)
+
+### Goal
+Remove callbacks from `nrrd_states` and methods from `gui_states`. These don't belong in state objects.
+
+### 2A: Extract Callbacks from nrrd_states
+
+**Before:**
 ```typescript
-// BEFORE:
-pencilColor.value = guiSettings.value.guiState.color = color;
-
-// AFTER:
-nrrdTools.setPencilColor(color);
+// nrrd_states 里混着 5 个回调
+interface INrrdStates {
+  sphereRadius: number;           // ← state
+  getMask: (...) => void;         // ← callback (不是 state!)
+  getSphere: (...) => void;       // ← callback
+  // ...
+}
 ```
 
-### 3.6 Contrast Drag (Specialized)
+**After:**
+```typescript
+// 分离为独立接口
+interface IAnnotationCallbacks {
+  onMaskChanged: (sliceData: Uint8Array, layerId: string, ...) => void;
+  onSphereChanged: (origin: number[], radius: number) => void;
+  onCalculatorPositionsChanged: (...) => void;
+  onLayerVolumeCleared: (layerId: string) => void;
+  onChannelColorChanged: (layerId: string, channel: number, color: RGBAColor) => void;
+}
+
+// DrawToolCore/NrrdTools 持有 callbacks 实例
+class DrawToolCore {
+  protected annotationCallbacks: IAnnotationCallbacks = { /* no-op defaults */ };
+}
+```
+
+**Migration:** 从 `this.nrrd_states.getMask(...)` → `this.annotationCallbacks.onMaskChanged(...)`
+- ~30 references to update
+- All internal (tools + DrawToolCore + NrrdTools)
+
+### 2B: Extract Methods from gui_states
+
+**Before:**
+```typescript
+interface IGUIStates {
+  globalAlpha: number;     // ← state
+  clear: () => void;       // ← method (不是 state!)
+  undo: () => void;        // ← method
+  // ...
+}
+```
+
+**After:**
+```typescript
+interface IGUIStates {
+  globalAlpha: number;
+  // clear(), undo() etc REMOVED from interface
+}
+
+// Methods live in NrrdTools (most already exist)
+class NrrdTools {
+  undo(): void { ... }          // Already exists at NrrdTools.ts:453
+  redo(): void { ... }          // Already exists at NrrdTools.ts:469
+  clearActiveSlice(): void { ... }  // Already exists at NrrdTools.ts:1291
+  resetZoom(): void { ... }     // NEW: move logic from gui_states.resetZoom
+  // ...
+}
+```
+
+**Migration:**
+- Remove 6 method definitions from `gui_states` initialization in CommToolsData.ts
+- Update `dat.gui` bindings in gui.ts to call NrrdTools methods
+- ~12 references to update
+
+### Risk: LOW
+Callbacks are set once and invoked from internal code only. Methods already mostly exist in NrrdTools.
+
+---
+
+## 5. Phase 3: Visibility Enforcement (1 day)
+
+### Goal
+Make `nrrd_states`, `gui_states`, `protectedData` inaccessible from outside the core TS modules.
+
+### Changes
 
 ```typescript
-/**
- * Apply an incremental contrast adjustment (called from drag events).
- * Handles clamping and readyToUpdate flag internally.
- */
-adjustContrast(type: "windowHigh" | "windowLow", delta: number): void;
+// CommToolsData.ts
+export class CommToolsData {
+  // BEFORE: public (anyone can reach in)
+  nrrd_states: INrrdStates = { ... };
+  gui_states: IGUIStates = { ... };
+  protectedData: IProtected;
+
+  // AFTER: protected (only subclasses + internal tools)
+  protected nrrd_states: INrrdStates = { ... };
+  protected gui_states: IGUIStates = { ... };
+  protected protectedData: IProtected;
+}
 ```
 
-**Replaces in OperationCtl.vue (lines 234-248):**
+### External Violations to Fix (4 total)
+
+| File | Current Access | Fix |
+|------|---------------|-----|
+| `useDistanceCalculation.ts:51` | `nrrdTools.nrrd_states.voxelSpacing` | → `nrrdTools.getVoxelSpacing()` (already exists) |
+| `useDistanceCalculation.ts:58` | `nrrdTools.nrrd_states.spaceOrigin` | → `nrrdTools.getSpaceOrigin()` (already exists) |
+| `useDistanceCalculation.ts:148` | `nrrdTools.gui_states.activeSphereType` | → `nrrdTools.getActiveSphereType()` (add getter) |
+| `utils.ts:64` | `nrrdTools.nrrd_states.voxelSpacing` | → `nrrdTools.getVoxelSpacing()` (already exists) |
+
+### Tools Still Access via ToolContext (Internal — OK)
+
 ```typescript
-// BEFORE: 15 lines of manual value calculation + clamping + onChange call
-
-// AFTER:
-nrrdTools.adjustContrast("windowHigh", step * contrastDragSensitivity.value);
+// tools/BaseTool.ts — ToolContext 是内部接口，传递 protected 引用
+interface ToolContext {
+  nrrd_states: INrrdStates;    // 同一模块内部，protected 可以传递
+  gui_states: IGUIStates;
+  protectedData: IProtected;
+}
 ```
 
-### 3.7 Read-Only State Access (Replaces `guiState` Direct Access)
+DrawToolCore（CommToolsData 的子类）创建 ToolContext 时可以访问 `this.nrrd_states`，然后传递给内部工具。外部代码无法访问。
+
+### Risk: LOW
+只有 4 个外部引用需要修复，且替代的 getter 已经存在。
+
+---
+
+## 6. Phase 4: nrrd_states → NrrdState 管理类 (1-2 weeks)
+
+### Goal
+创建 `NrrdState` 类集中管理状态，将 44 个属性拆分为 5 个语义组。**不是简单拆接口** — 而是提供带验证、语义化方法的管理类。
+
+### Why a Class, Not Just Interfaces
 
 ```typescript
-/**
- * Get read-only snapshot of GUI state for UI rendering.
- * Returns metadata (min/max/step) for slider controls.
- */
-getGuiMeta(): IGuiMeta;
+// ❌ 仅拆接口 — 散落各处，任何代码都能直接改
+this.imageMetadata.originWidth = -1;  // 没有验证
+this.viewState.sizeFoctor = 999;      // 没有约束
 
-/**
- * Check if a mode is active (for UI highlight).
- */
-isModeActive(mode: ToolMode): boolean;
-
-/**
- * Check if calculator mode is active.
- */
-isCalculatorActive(): boolean;
+// ✅ NrrdState 管理类 — 集中管理，带验证，语义化访问
+class NrrdState {
+  setZoomFactor(factor: number): void {
+    this._view.sizeFoctor = Math.max(1, Math.min(8, factor));
+  }
+  resetSphereState(): void {
+    // 集中管理所有 sphere 重置逻辑，不会遗漏字段
+  }
+  initializeFromNrrd(data: ...): void {
+    // 加载时一次性设置所有 image metadata
+  }
+}
 ```
 
+### NrrdState Class Design
+
+```typescript
+class NrrdState {
+  private _image: IImageMetadata;
+  private _view: IViewState;
+  private _interaction: IInteractionState;
+  private _sphere: ISphereState;
+  private _flags: IInternalFlags;
+
+  // Grouped accessors
+  get image(): IImageMetadata { return this._image; }
+  get view(): IViewState { return this._view; }
+  get interaction(): IInteractionState { return this._interaction; }
+  get sphere(): ISphereState { return this._sphere; }
+  get flags(): IInternalFlags { return this._flags; }
+
+  // Validated setters
+  setZoomFactor(factor: number): void;
+  setSliceIndex(index: number): void;
+  initializeImageMetadata(data: Partial<IImageMetadata>): void;
+  resetSphereState(): void;
+  resetViewState(): void;
+}
+```
+
+### New State Interfaces
+
+```typescript
+/** 图像元数据 — 加载后不变 */
+interface IImageMetadata {
+  originWidth: number;
+  originHeight: number;
+  nrrd_x_mm: number;
+  nrrd_y_mm: number;
+  nrrd_z_mm: number;
+  nrrd_x_pixel: number;
+  nrrd_y_pixel: number;
+  nrrd_z_pixel: number;
+  dimensions: number[];
+  voxelSpacing: number[];
+  spaceOrigin: number[];
+  RSARatio: number;
+  ratios: ICommXYZ;
+  layers: string[];          // 只读配置
+}
+
+/** 视图运行时状态 — 频繁变化 */
+interface IViewState {
+  changedWidth: number;
+  changedHeight: number;
+  currentSliceIndex: number;
+  preSliceIndex: number;
+  maxIndex: number;
+  minIndex: number;
+  contrastNum: number;
+  sizeFoctor: number;        // TODO: rename to sizeFactor
+  showContrast: boolean;
+  previousPanelL: number;
+  previousPanelT: number;
+  switchSliceFlag: boolean;
+}
+
+/** 鼠标/光标交互 — 纯内部 */
+interface IInteractionState {
+  Mouse_Over_x: number;     // TODO: rename to mouseOverX
+  Mouse_Over_y: number;
+  Mouse_Over: boolean;
+  cursorPageX: number;
+  cursorPageY: number;
+  isCursorSelect: boolean;
+  drawStartPos: ICommXY;
+}
+
+/** Sphere 工具状态 */
+interface ISphereState {
+  sphereOrigin: ICommXYZ;
+  tumourSphereOrigin: ICommXYZ | null;
+  skinSphereOrigin: ICommXYZ | null;
+  ribSphereOrigin: ICommXYZ | null;
+  nippleSphereOrigin: ICommXYZ | null;
+  sphereMaskVolume: any;
+  sphereRadius: number;
+}
+
+/** 内部控制标志 */
+interface IInternalFlags {
+  stepClear: number;
+  clearAllFlag: boolean;
+  loadingMaskData: boolean;
+}
+```
+
+### Migration Strategy: Dual-Track with NrrdState Class
+
+```typescript
+// CommToolsData.ts — 迁移期间双轨并行
+class CommToolsData {
+  protected nrrdState: NrrdState;       // 新: 管理类
+  protected nrrd_states: INrrdStates;   // 旧: 保留到所有引用迁移完
+
+  constructor() {
+    this.nrrdState = new NrrdState(/* defaults */);
+    this.nrrd_states = /* legacy init */;
+  }
+}
+
+// ToolContext — 迁移期间同时提供新旧访问
+interface ToolContext {
+  state: NrrdState;              // 新: 工具逐步迁移到这个
+  nrrd_states: INrrdStates;     // 旧: 未迁移的工具继续用
+  gui: GuiState;                 // Phase 5
+  gui_states: IGUIStates;        // Phase 5 之前
+  protectedData: IProtected;
+  callbacks: IAnnotationCallbacks;
+}
+```
+
+**Migration approach — tool by tool (从小到大):**
+
+1. Create `NrrdState` class, add to CommToolsData + ToolContext
+2. Migrate one tool at a time (旧引用和新引用可以共存):
+   - `PanTool` (8 refs — smallest) → use `ctx.state.view.previousPanelL`
+   - `ZoomTool` (3 refs) → use `ctx.state.view.sizeFoctor`
+   - `ContrastTool` (min refs)
+   - `EraserTool` (6 refs)
+   - `DrawingTool` (14 refs)
+   - `DragSliceTool` (40 refs)
+   - `ImageStoreHelper` (12 refs)
+   - `CrosshairTool` (55 refs — largest)
+   - `SphereTool` (70 refs — largest, mostly sphere state)
+4. Migrate `DrawToolCore` (~60 refs)
+5. Migrate `NrrdTools` (~100 refs)
+6. Remove legacy `nrrd_states` flat object
+
+### Reference Counts Per Tool
+
+| Tool | nrrd_states refs | Primary groups used |
+|------|-----------------|---------------------|
+| PanTool | 8 | view (previousPanelL/T) |
+| ZoomTool | 3 | view (sizeFoctor) |
+| ContrastTool | ~3 | view (showContrast) |
+| EraserTool | 6 | image (layers), view (changedW/H) |
+| DrawingTool | 14 | interaction (drawStartPos), flags (stepClear), view (changedW/H) |
+| DragSliceTool | 40 | view (sliceIndex, contrast, changedW/H, showContrast) |
+| ImageStoreHelper | 12 | flags (loadingMaskData, clearAllFlag), image (layers) |
+| CrosshairTool | 55 | image (nrrd_x/y/z, ratios), interaction (cursorPage), sphere |
+| SphereTool | 70 | sphere (all), image (nrrd_x/y/z), view (changedW/H) |
+| DrawToolCore | ~60 | 混合 |
+| NrrdTools | ~100 | 混合 |
+
+### Risk: MEDIUM
+- 500+ 内部引用需要逐步迁移
+- 但每个工具可独立迁移、独立测试
+- 旧的 `nrrd_states` 在迁移期间保持可用
+- 随时可暂停，不影响已迁移的部分
+
 ---
 
-## 4. Implementation Strategy
+## 7. Phase 5: gui_states Cleanup (3-5 days)
 
-### 4.1 Approach: Additive Then Migratory
+### Goal
+创建 `GuiState` 管理类，将 24 个属性拆为 4 个语义组，提供带验证的 setter 方法。
 
-1. **Add** new methods to NrrdTools (no breaking changes)
-2. **Migrate** Vue components one at a time to use new API
-3. **Remove** `getGuiSettings()` callback exposure after all consumers migrated
-4. **Keep** `guiState` read access for cases where components need current values
+### GuiState Class Design
 
-### 4.2 Internally: Move gui.ts Closure Logic Into NrrdTools
+```typescript
+class GuiState {
+  private _mode: IToolModeState;
+  private _drawing: IDrawingConfig;
+  private _viewConfig: IViewConfig;
+  private _layerChannel: ILayerChannelState;
 
-The closure functions in gui.ts (lines 229-317) need to become NrrdTools methods:
+  get mode(): IToolModeState { return this._mode; }
+  get drawing(): IDrawingConfig { return this._drawing; }
+  get viewConfig(): IViewConfig { return this._viewConfig; }
+  get layerChannel(): ILayerChannelState { return this._layerChannel; }
 
-| gui.ts closure | Becomes NrrdTools method | Called by |
-|----------------|------------------------|-----------|
-| `updatePencilState()` | `private updatePencilState()` | `setMode()` |
-| `updateGuiEraserState()` | `private updateEraserState()` | `setMode()` |
-| `updateGuiBrushAndEraserSize()` | `private updateBrushCursor()` | `setBrushSize()` |
-| `updateGuiSphereState()` | `enterSphereMode()` / `exitSphereMode()` | Already exist! `setMode()` |
-| `updateCalDistance()` | Extend `setActiveSphereType()` | Already partially done |
-| `updateGuiImageWindowHighOnChange()` | `setWindowHigh()` | New method |
-| `updateGuiImageWindowLowOnChange()` | `setWindowLow()` | New method |
-| `updateGuiImageContrastOnFinished()` | `finishWindowAdjustment()` | New method |
+  // 带验证的 setter
+  setToolMode(mode: ToolMode): void {
+    // 确保互斥: pencil/eraser/sphere 不能同时 true
+  }
+  setBrushSize(size: number): void {
+    this._drawing.brushAndEraserSize = Math.max(5, Math.min(50, size));
+  }
+  setOpacity(value: number): void {
+    this._drawing.globalAlpha = Math.max(0.1, Math.min(1, value));
+  }
+}
+```
 
-**Key insight:** `enterSphereMode()` and `exitSphereMode()` already exist in NrrdTools.ts:1357-1408. The gui.ts closure `updateGuiSphereState()` just delegates to them. So the wiring is already half done.
+### New Interfaces
 
-### 4.3 dat.gui Still Works
+```typescript
+/** 工具模式配置 */
+interface IToolModeState {
+  pencil: boolean;
+  Eraser: boolean;
+  sphere: boolean;
+  activeSphereType: SphereType;
+}
 
-The `dat.gui` controllers in gui.ts (lines 52-227) bind directly to `gui_states` properties and have their own `onChange` handlers. These continue to work as-is — they call the same closure functions. The difference is that Vue components will **stop** calling those closures directly and will go through NrrdTools instead.
+/** 绘图参数 */
+interface IDrawingConfig {
+  globalAlpha: number;
+  lineWidth: number;
+  color: string;
+  fillColor: string;
+  brushColor: string;
+  brushAndEraserSize: number;
+}
 
-In the future, if `dat.gui` is removed from the UI (replaced by custom Vue controls), the closures can be removed entirely since NrrdTools methods handle everything.
+/** 视图配置 */
+interface IViewConfig {
+  mainAreaSize: number;
+  dragSensitivity: number;
+  cursor: string;
+  max_sensitive: number;      // → 内部
+  defaultPaintCursor: string; // → 内部
+  readyToUpdate: boolean;     // → 内部
+}
 
----
+/** Layer/Channel 管理 */
+interface ILayerChannelState {
+  layer: string;
+  activeChannel: number;
+  layerVisibility: Record<string, boolean>;
+  channelVisibility: Record<string, Record<number, boolean>>;
+}
+```
 
-## 5. Phase Breakdown
+### Migration
+- ~136 内部引用需迁移
+- 工具通过 `this.ctx.gui.drawing.brushColor` 访问
+- 比 Phase 4 规模小
 
-### Phase A: Add NrrdTools Methods (NrrdTools.ts + DrawToolCore.ts)
-
-Add the new public API methods. Each method:
-1. Updates `gui_states` properties
-2. Calls the appropriate internal side-effect function
-3. Is strongly typed
-
-**Files modified:**
-- `NrrdTools.ts` — add public methods
-- `DrawToolCore.ts` — may need to expose some internal helpers as `protected`
-- `coreType.ts` — add `ToolMode` type, `IGuiMeta` interface
-
-### Phase B: Migrate Vue Components
-
-Update each component to use `nrrdTools.*` methods instead of `guiSettings.value.*`:
-
-1. **OperationCtl.vue** (24 usages → ~8 `nrrdTools.*` calls) — biggest change
-2. **Calculator.vue** (9 usages → ~3 `nrrdTools.*` calls) — `setActiveSphereType()`
-3. **OperationAdvance.vue** (5 usages → ~2 `nrrdTools.*` calls) — `setPencilColor()`
-4. **useCaseManagement.ts** (1 usage) — may still emit `guiMeta` for slider rendering
-
-### Phase C: Clean Up
-
-- Simplify `getGuiSettings()` to return metadata only (remove callback exposure)
-- Update `IGuiParameterSettings` type to remove `onChange` fields
-- Add deprecation comment if backward compatibility needed
-- Update `Segmentation:FinishLoadAllCaseImages` emitter payload
-
----
-
-## 6. Risk Analysis
-
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
-| `dat.gui` onChange and NrrdTools method both fire | Low | Medium | NrrdTools methods set state first, dat.gui reacts to same state |
-| Some edge case in mode switching missed | Medium | Low | Preserve exact same if/else logic, just move it into `setMode()` |
-| Components still need `guiState` for reads | Expected | None | Keep read access, only remove callback access |
-| Calculator opens/closes via emitter events | None | None | Calculator still uses emitter; only sphere type setting changes |
-
-**Overall Risk: LOW** — This is additive. New methods are added alongside existing ones. Old pattern continues to work until migration is complete. No internal restructuring needed.
-
----
-
-## 7. Success Criteria
-
-- [ ] Zero `guiSettings.value.guiSetting[...].onChange(...)` calls remain in Vue components
-- [ ] Zero `guiSettings.value.guiState[...] = value` mutations remain in Vue components (read access OK)
-- [ ] All mode switching goes through `nrrdTools.setMode()`
-- [ ] All slider changes go through typed NrrdTools methods
-- [ ] TypeScript build passes with zero new errors
-- [ ] Manual testing: pencil/brush/eraser/sphere/calculator mode switching works
-- [ ] Manual testing: opacity/brush size/window high/window low sliders work
-- [ ] Manual testing: undo/redo/clear/resetZoom buttons work
-- [ ] Manual testing: color picker works
-- [ ] Manual testing: contrast drag works
-- [ ] dat.gui panel still functions correctly (if visible)
+### Risk: MEDIUM
+同 Phase 4 — 逐步迁移，随时可暂停。
 
 ---
 
-## 8. Relationship to Overall Plan
+## 8. Success Criteria
 
-This refactor is **not** the "Full State Management Refactor" (738 references, 6-8 weeks) that was marked as "Not Recommended" in `overall_plan.md`.
+### Phase 1
+- [ ] Zero `guiSettings.value.guiSetting[...].onChange()` in Vue components
+- [ ] Zero `guiSettings.value.guiState[...] = value` mutations in Vue components
+- [ ] All mode/slider/button operations through typed NrrdTools methods
 
-It is closer to **Option A: Facade Pattern** (1-2 days estimated in the plan), but more targeted:
-- Scope: ~39 `guiSettings` usages across 4 files (not 738 state references)
-- Duration: 2-3 days
-- Risk: Low (additive API, no internal restructuring)
-- Benefit: Eliminates the worst abstraction leak; typed API; better readability
+### Phase 2
+- [ ] Zero callbacks in `INrrdStates`
+- [ ] Zero methods in `IGUIStates`
+- [ ] `IAnnotationCallbacks` interface defined and used
 
-After this refactor, `nrrd_states`, `gui_states`, and `protectedData` internal structure remains unchanged. Only the **access pattern from Vue components** changes.
+### Phase 3
+- [ ] `nrrd_states`, `gui_states`, `protectedData` are `protected`
+- [ ] Zero direct external access (0 violations)
+
+### Phase 4
+- [ ] `INrrdStates` split into 5 semantic interfaces
+- [ ] All tools use grouped access pattern
+- [ ] Legacy flat `nrrd_states` removed
+
+### Phase 5
+- [ ] `IGUIStates` split into 4 semantic interfaces
+- [ ] Internal-only properties hidden
+
+### All Phases
+- [ ] `yarn build` — zero new TypeScript errors
+- [ ] All manual tests pass (drawing, panning, sphere, contrast, undo/redo)
+- [ ] No behavior regressions
+
+---
+
+## 9. Timeline
+
+```
+Week 1:  Phase 1 (GUI API) + Phase 2 (Callbacks/Methods)
+Week 2:  Phase 3 (Visibility) + Phase 4 begins (nrrd_states split — small tools)
+Week 3:  Phase 4 continues (large tools: CrosshairTool, SphereTool, DrawToolCore, NrrdTools)
+Week 4:  Phase 4 completes + Phase 5 (gui_states cleanup)
+```
+
+Decision gates after each phase — can pause and ship at any point.
+
+---
+
+## 10. Comparison with Overall Plan Assessment
+
+| | Overall Plan Assessment | This Refactor |
+|---|---|---|
+| **Scope** | 738 refs, 6-8 weeks, "Not Recommended" | 1077 refs but phased, 3-4 weeks |
+| **Approach** | Big-bang rewrite | Incremental, per-tool migration |
+| **Risk** | HIGH (all or nothing) | LOW→MEDIUM (each phase independent) |
+| **Rollback** | Hard | Easy (each phase independently reversible) |
+| **User benefit** | None | Phase 1 immediately improves Vue code readability |
+
+The difference: we're not doing a big-bang rewrite. Each phase is a contained change that can be tested, shipped, and rolled back independently.
 
 ---
 
