@@ -326,7 +326,8 @@ Sphere mode activated (gui_states.mode.sphere = true, keyboard shortcut: 'q'):
   │   ├─ convert origin to all 3 axes (setUpSphereOrigins)
   │   ├─ enable crosshair at click position
   │   └─ draw calculator sphere preview
-  │   Then DrawToolCore binds sphere wheel + pointerup events
+  │   Then DrawToolCore sets activeWheelMode = 'sphere'
+  │   (EventRouter's permanent wheel handler dispatches to sphereWheel)
   │
   ├─ Scroll wheel (while holding) → adjust radius [1, 50]
   │
@@ -335,7 +336,7 @@ Sphere mode activated (gui_states.mode.sphere = true, keyboard shortcut: 'q'):
       ├─ refresh sphere canvas overlay
       ├─ fire onSphereChanged callback
       └─ fire onCalculatorPositionsChanged callback
-      Then DrawToolCore restores zoom/slice wheel
+      Then DrawToolCore sets activeWheelMode = 'zoom'
 ```
 
 ##### SphereMaskVolume
