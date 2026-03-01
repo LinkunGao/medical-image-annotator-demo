@@ -9,7 +9,7 @@
 > - **`SliceRenderPipeline`** — slice setup, canvas rendering, mask reload, canvas flip
 > - **`DataLoader`** — NRRD slice loading, legacy mask loading, NIfTI voxel loading
 >
-> All modules communicate via `ToolContext` (shared state) and `*Callbacks` interfaces (host method callbacks). The public API documented below is unchanged.
+> All modules communicate via `ToolContext` (shared state) and `Pick<ToolHost, ...>` type aliases (host method dependencies). The public API documented below is unchanged.
 
 ---
 
