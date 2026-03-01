@@ -295,10 +295,6 @@ export class DrawToolCore extends CommToolsData {
     );
   }
 
-  private clearSpherePrintStoreImages() {
-    this.sphereTool.clearSpherePrintStoreImages();
-  }
-
   private paintOnCanvas() {
     // Initialize tools for this paint cycle
     this.drawingTool.reset(this.useEraser());

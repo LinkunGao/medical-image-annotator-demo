@@ -43,7 +43,7 @@
  * - drawSphereOnEachViews / drawCalculatorSphereOnEachViews
  * - storeSphereImages / setSphereCanvasSize
  * - drawCalculatorSphere / configMouseSphereWheel
- * - getSpherePosition / clearSpherePrintStoreImages
+ * - getSpherePosition
  */
 
 import { BaseTool } from "./BaseTool";
@@ -442,17 +442,6 @@ export class SphereTool extends BaseTool {
     }
     // NOTE: Does NOT composite to master canvas — the start() render loop
     // draws the sphere canvas directly to drawingCtx for proper layering.
-  }
-
-  /**
-   * Clear sphere overlay images.
-   *
-   * No-op in current implementation — sphere data is rendered as overlay
-   * and stored in the dedicated sphereMaskVolume (not in layer volumes).
-   */
-  clearSpherePrintStoreImages(): void {
-    // No-op: sphere images are stored in sphereMaskVolume, not layer volumes.
-    // The sphereMaskVolume is cleared in NrrdTools.reset() when switching cases.
   }
 
   // ===== 3D Sphere Volume Write =====
