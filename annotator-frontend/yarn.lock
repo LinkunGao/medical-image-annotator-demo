@@ -1611,7 +1611,7 @@ copper3d-tree@^1.0.1:
     ndarray-select "^1.0.0"
     typedarray-pool "^1.0.0"
 
-copper3d@^3.1.0:
+copper3d@^3.1.1:
   version "3.1.1"
   resolved "https://registry.yarnpkg.com/copper3d/-/copper3d-3.1.1.tgz#73acb86ddfd8db2532e72a4ab5f0ab4d6406365b"
   integrity sha512-FAkVTHWYLYtTKsft4Bdbk2fk1bzImhc0XjmDNUkCgkxByhOppc1pLN7dHRyVvwohqbily0U20QvHR7mTMKuqUw==

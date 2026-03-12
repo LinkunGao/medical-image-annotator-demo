@@ -43,7 +43,13 @@ export default defineConfig(({ command, mode }) => {
     plugins: [
       vue(
         isBuild
-          ? {}
+          ? {
+            template: {
+              compilerOptions: {
+                isCustomElement: (tag) => tag.startsWith("ion-"),
+              },
+            },
+          }
           : {
             template: {
               transformAssetUrls,
@@ -84,6 +90,10 @@ export default defineConfig(({ command, mode }) => {
     resolve: {
       alias: {
         "@": fileURLToPath(new URL("./src", import.meta.url)),
+        // copper3d-tree dist was built with webpack eval devtool (dev mode),
+        // which breaks in Rollup 4.59+ due to aggressive CJS->ESM exports renaming.
+        // Point directly to the plain-CJS source file to avoid the issue.
+        "copper3d-tree": fileURLToPath(new URL("./node_modules/copper3d-tree/src/kdtree.js", import.meta.url)),
       },
       extensions: [".js", ".json", ".jsx", ".mjs", ".ts", ".tsx", ".vue"],
     },
@@ -99,7 +109,6 @@ export default defineConfig(({ command, mode }) => {
         rollupOptions: {
           external: ['vue', 'vuetify', 'pinia', 'vue-toastification'],
           output: {
-            inlineDynamicImports: true,
             globals: {
               vue: 'Vue',
               vuetify: 'Vuetify',

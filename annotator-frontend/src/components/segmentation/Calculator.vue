@@ -59,7 +59,8 @@
  */
 import { ref, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
-import type { NrrdTools } from "@/ts/index";
+// import type { NrrdTools } from "@/ts/index";
+import type { NrrdTools } from "copper3d";
 
 const calculatorPickerRadios = ref("tumour");
 const calculatorPickerRadiosDisabled = ref(true);

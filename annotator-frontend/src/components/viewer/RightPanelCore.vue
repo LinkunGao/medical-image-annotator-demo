@@ -40,8 +40,8 @@
  * @exposes resetNrrdImageView - Function to reset the view
  */
 import * as THREE from "three";
-// import * as Copper from "copper3d";
-import * as Copper from "@/ts/index";
+import * as Copper from "copper3d";
+// import * as Copper from "@/ts/index";
 import "copper3d/dist/css/style.css";
 import { ref, onMounted } from 'vue'
 import loadingGif from "@/assets/loading.svg";

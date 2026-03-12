@@ -12,8 +12,8 @@ import { ref, type Ref } from "vue";
 import { useSingleFile } from "@/plugins/api/index";
 import { switchAnimationStatus } from "@/components/viewer/utils";
 import { useToast } from "@/composables/useToast";
-// import * as Copper from "copper3d";
-import * as Copper from "@/ts/index"
+import * as Copper from "copper3d";
+// import * as Copper from "@/ts/index"
 import * as THREE from "three";
 import { IDetails } from "@/models";
 

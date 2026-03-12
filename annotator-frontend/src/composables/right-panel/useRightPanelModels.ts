@@ -12,8 +12,8 @@
  */
 import { ref, type Ref } from "vue";
 import * as THREE from "three";
-// import * as Copper from "copper3d";
-import * as Copper from "@/ts/index";
+import * as Copper from "copper3d";
+// import * as Copper from "@/ts/index";
 import { ICommXYZ, ISaveSphere } from "@/models";
 
 /**

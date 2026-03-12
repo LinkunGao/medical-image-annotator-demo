@@ -8,7 +8,8 @@
  * Provides reactive state for Vue components and syncs with NrrdTools.
  */
 import { ref, computed, type Ref, type ComputedRef } from "vue";
-import * as Copper from "@/ts/index";
+// import * as Copper from "@/ts/index";
+import * as Copper from "copper3d";
 import emitter from "@/plugins/custom-emitter";
 // import * as Copper from "copper3d";
 

@@ -58,7 +58,8 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
-import type { NrrdTools } from "@/ts/index";
+// import type { NrrdTools } from "@/ts/index";
+import type { NrrdTools } from "copper3d";
 
 function hexToRgba(hex: string): { r: number; g: number; b: number; a: number } {
   const h = hex.replace('#', '');

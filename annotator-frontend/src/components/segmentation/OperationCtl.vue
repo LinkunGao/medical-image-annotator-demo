@@ -71,7 +71,8 @@ import SliderControl from "@/components/navigation/SliderControl.vue";
 import ButtonsControl from "@/components/navigation/ButtonsControl.vue";
 import { ref, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
-import type { NrrdTools, ToolMode } from "@/ts/index";
+// import type { NrrdTools, ToolMode } from "@/ts/index";
+import type { NrrdTools, ToolMode } from "copper3d";
 
 const commFuncRadios = ref("pencil");
 const commFuncRadiosDisabled = ref(true);
