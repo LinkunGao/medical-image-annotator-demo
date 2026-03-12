@@ -9,6 +9,7 @@
  */
 import { ref, computed, type Ref, type ComputedRef } from "vue";
 import * as Copper from "@/ts/index";
+import emitter from "@/plugins/custom-emitter";
 // import * as Copper from "copper3d";
 
 // ===== Types =====
@@ -22,6 +23,8 @@ export interface LayerConfig {
     name: string;
     disable?: boolean;
     disabledChannels?: number[];
+    /** Default opacity for this layer (0.1 - 1.0). Defaults to 1.0 if not set. */
+    defaultOpacity?: number;
 }
 
 export interface ChannelConfig {
@@ -84,6 +87,11 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
         Object.fromEntries(LAYER_CONFIGS.map(l => [l.id, { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true }]))
     );
 
+    /** Per-layer opacity (from defaultOpacity config, fallback to 1.0) */
+    const layerOpacity = ref<Record<Copper.LayerId, number>>(
+        Object.fromEntries(LAYER_CONFIGS.map(l => [l.id, l.defaultOpacity ?? 1.0]))
+    );
+
     /** Layer disabled states */
     const layerDisabled = ref<Record<Copper.LayerId, boolean>>(
         Object.fromEntries(LAYER_CONFIGS.map(l => [l.id, l.disable ?? false]))
@@ -140,6 +148,11 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
         return config?.name || activeLayer.value;
     });
 
+    /** Get opacity of the currently active layer */
+    const activeLayerOpacity: ComputedRef<number> = computed(() => {
+        return layerOpacity.value[activeLayer.value] ?? 1.0;
+    });
+
     // ===== Actions =====
 
     /**
@@ -148,6 +161,7 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
     function setActiveLayer(layerId: Copper.LayerId): void {
         activeLayer.value = layerId;
         deps.nrrdTools.value?.setActiveLayer(layerId);
+        emitter.emit("LayerChannel:ActiveLayerChanged", layerId);
     }
 
     /**
@@ -198,6 +212,7 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
      */
     function enableControls(): void {
         controlsEnabled.value = true;
+        applyDefaultOpacities();
     }
 
     /**
@@ -216,6 +231,26 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
     }
 
     /**
+     * Set per-layer opacity and sync to NrrdTools
+     */
+    function setLayerOpacity(layerId: Copper.LayerId, opacity: number): void {
+        layerOpacity.value[layerId] = Math.max(0.1, Math.min(1, opacity));
+        deps.nrrdTools.value?.setLayerOpacity(layerId, opacity);
+    }
+
+    /**
+     * Apply defaultOpacity from LAYER_CONFIGS to NrrdTools.
+     * Called once during enableControls() after images are loaded.
+     */
+    function applyDefaultOpacities(): void {
+        LAYER_CONFIGS.forEach(cfg => {
+            if (cfg.defaultOpacity !== undefined) {
+                deps.nrrdTools.value?.setLayerOpacity(cfg.id, cfg.defaultOpacity);
+            }
+        });
+    }
+
+    /**
      * Sync state from NrrdTools (called after initialization)
      */
     function syncFromManager(): void {
@@ -230,6 +265,7 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
         // Sync visibility states
         const layerVis = tools.getLayerVisibility();
         const channelVis = tools.getChannelVisibility();
+        const opacityMap = tools.getLayerOpacityMap();
 
         // Iterate over all configured layers (derived from LAYER_CONFIGS, not hardcoded),
         // so adding a new layer to LAYER_CONFIGS automatically includes it here.
@@ -241,6 +277,8 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
             if (channelVis[layerId]) {
                 channelVisibility.value[layerId] = { ...channelVis[layerId] };
             }
+            // Sync per-layer opacity
+            layerOpacity.value[layerId] = opacityMap[layerId] ?? 1.0;
         });
 
         // Also refresh channel colors from volumes
@@ -258,11 +296,13 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
         layerDisabled,
         channelDisabled,
         controlsEnabled,
+        layerOpacity,
 
         // Computed
         dynamicChannelConfigs,
         activeChannelColor,
         activeLayerName,
+        activeLayerOpacity,
 
         // Actions
         setActiveLayer,
@@ -274,6 +314,7 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
         enableControls,
         disableControls,
         refreshChannelColors,
+        setLayerOpacity,
         syncFromManager,
 
         // Configs (for UI rendering)

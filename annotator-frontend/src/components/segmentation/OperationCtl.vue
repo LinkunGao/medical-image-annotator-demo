@@ -101,6 +101,7 @@ const commFuncRadioValues = ref([
 
 const commSliderRadioValues = ref([
   { label: "Opacity", value: "globalAlpha", color: "success" },
+  { label: "Layer Alpha", value: "layerAlpha", color: "secondary" },
   { label: "B&E Size", value: "brushAndEraserSize", color: "info" },
   { label: "WindowHigh", value: "windowHigh", color: "warning" },
   { label: "WindowCenter", value: "windowLow", color: "error" },
@@ -144,6 +145,7 @@ function manageEmitters() {
   emitter.on("Common:DragImageWindowCenter", emitterOnDragImageWindowCenter);
   emitter.on("Common:DragImageWindowHigh", emitterOnDragImageWindowHigh);
   emitter.on("Core:NrrdTools", emitterOnNrrdTools);
+  emitter.on("LayerChannel:ActiveLayerChanged", emitterOnActiveLayerChanged);
 }
 
 const emitterOnCaseSwitched = async (_casename: string) => {
@@ -189,6 +191,13 @@ const emitterOnNrrdTools = (tool: NrrdTools) => {
   nrrdTools = tool;
 }
 
+const emitterOnActiveLayerChanged = (_layerId: string) => {
+  // When active layer changes, refresh slider if Layer Alpha is selected
+  if (commSliderRadios.value === "layerAlpha") {
+    updateSliderSettings();
+  }
+}
+
 /** Map Eraser radio value to ToolMode */
 const MODE_MAP: Record<string, ToolMode> = {
   pencil: "pencil",
@@ -224,6 +233,9 @@ function toggleSlider(val: number) {
   switch (commSliderRadios.value) {
     case "globalAlpha":
       nrrdTools.setOpacity(val);
+      break;
+    case "layerAlpha":
+      nrrdTools.setLayerOpacity(nrrdTools.getActiveLayer(), val);
       break;
     case "brushAndEraserSize":
       nrrdTools.setBrushSize(val);
@@ -278,6 +290,7 @@ onUnmounted(() => {
   emitter.off("Common:DragImageWindowCenter", emitterOnDragImageWindowCenter);
   emitter.off("Common:DragImageWindowHigh", emitterOnDragImageWindowHigh);
   emitter.off("Core:NrrdTools", emitterOnNrrdTools);
+  emitter.off("LayerChannel:ActiveLayerChanged", emitterOnActiveLayerChanged);
 });
 
 </script>

@@ -37,6 +37,7 @@ const eventNames = [
     "toast:show",
     "LayerChannel:RefreshColors",
     "LayerChannel:ActiveChanged",
+    "LayerChannel:ActiveLayerChanged",
 ];
 type EventNames = (typeof eventNames)[number];
 

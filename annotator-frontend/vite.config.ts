@@ -60,6 +60,7 @@ export default defineConfig(({ command, mode }) => {
           replaceNamedImportsFromGlobals({
             pinia: { globalName: 'Pinia', symbols: ["defineStore", "storeToRefs"] },
             vuetify: { globalName: 'Vuetify', symbols: ["useTheme"] },
+            'vue-toastification': { globalName: 'VueToastification', symbols: ['useToast', 'TYPE'] },
           }),
         ]
         : [
@@ -96,12 +97,14 @@ export default defineConfig(({ command, mode }) => {
           fileName: (format) => `my-app.${format}.js`,
         },
         rollupOptions: {
-          external: ['vue', 'vuetify', 'pinia'],
+          external: ['vue', 'vuetify', 'pinia', 'vue-toastification'],
           output: {
+            inlineDynamicImports: true,
             globals: {
               vue: 'Vue',
               vuetify: 'Vuetify',
               pinia: 'Pinia',
+              'vue-toastification': 'VueToastification',
             },
           },
         },

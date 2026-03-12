@@ -110,6 +110,7 @@ const emitterOnFinishLoadAllCaseImages = () => {
 | `Core:NrrdTools` | `emitterOnNrrdTools` | 接收 NrrdTools 实例 |
 | `Segmentation:FinishLoadAllCaseImages` | `emitterOnFinishLoadAllCaseImages` | 图片加载完毕，启用控件 |
 | `Segementation:CaseSwitched` | `emitterOnCaseSwitched` | Case 切换，禁用控件 |
+| `LayerChannel:ActiveLayerChanged` | (在 OperationCtl.vue 中监听) | 活跃 layer 切换时刷新 "Layer Alpha" slider 值 |
 
 ### 3.4 UI 交互事件处理
 
@@ -168,6 +169,7 @@ Template 绑定: [L78](annotator-frontend/src/components/segmentation/LayerChann
 | `layerDisabled` | `Ref<Record<LayerId, boolean>>` | 基于配置或 `false` | |
 | `channelDisabled` | `Ref<Record<LayerId, Record<number, boolean>>>` | 基于配置或 `false` | |
 | `controlsEnabled` | `Ref<boolean>` | `false` | |
+| `layerOpacity` | `Ref<Record<LayerId, number>>` | 从 `LAYER_CONFIGS.defaultOpacity` 初始化，默认 1.0 | |
 
 ### 4.2 Computed 属性
 
@@ -176,6 +178,7 @@ Template 绑定: [L78](annotator-frontend/src/components/segmentation/LayerChann
 | `dynamicChannelConfigs` | 动态 channel 配置列表，反映当前 layer 的 per-layer 自定义颜色（从 NrrdTools 获取） |
 | `activeChannelColor` | 当前 Channel 的 CSS 颜色（从 volume 动态获取，支持自定义颜色） |
 | `activeLayerName` | 当前 Layer 的显示名称 |
+| `activeLayerOpacity` | 当前活跃 Layer 的透明度值（计算属性，读取 `layerOpacity[activeLayer]`） |
 
 > **Phase B 变更**: `activeChannelColor` 和 `dynamicChannelConfigs` 通过 `colorVersion` ref 触发 Vue 响应式更新。当外部调用 `NrrdTools.setChannelColor()` 后，需调用 `refreshChannelColors()` 来递增 `colorVersion`，从而触发 computed 重新计算。
 
@@ -193,6 +196,7 @@ function setActiveLayer(layerId: Copper.LayerId): void {
 NrrdTools 内部:
 - 设置 `gui_states.layerChannel.layer = layerId`
 - 通过 `syncBrushColor()` 从新 layer 的 MaskVolume 动态获取当前 channel 的颜色，更新 `fillColor` / `brushColor`（支持 per-layer 自定义颜色）
+- 通过 `emitter.emit("LayerChannel:ActiveLayerChanged", layerId)` 通知 UI 组件刷新 slider 值
 
 #### `setActiveChannel(channel)` — [L110-113](annotator-frontend/src/composables/left-panel/useLayerChannel.ts#L110-L113)
 
@@ -246,10 +250,38 @@ NrrdTools 内部 ([NrrdTools.ts:222-227](annotator-frontend/src/ts/Utils/segment
 - `activeChannel` ← `nrrdTools.getActiveChannel()`
 - `layerVisibility` ← `nrrdTools.getLayerVisibility()`
 - `channelVisibility` ← `nrrdTools.getChannelVisibility()`
+- `layerOpacity` ← `nrrdTools.getLayerOpacityMap()`
+
+#### `setLayerOpacity(layerId, opacity)`
+
+```ts
+function setLayerOpacity(layerId: Copper.LayerId, opacity: number): void {
+  layerOpacity.value[layerId] = opacity;                      // 更新 Vue 状态
+  deps.nrrdTools.value?.setLayerOpacity(layerId, opacity);    // 同步到 NrrdTools
+}
+```
+
+NrrdTools 内部:
+- 设置 `gui_states.layerChannel.layerOpacity[layerId] = opacity`
+- 调用 `reloadMasksFromVolume()` → 重新渲染所有 Layer
+
+#### `applyDefaultOpacities()` — 在 `enableControls()` 时调用
+
+将 `LAYER_CONFIGS` 中的 `defaultOpacity` 配置推送到 NrrdTools 后端：
+
+```ts
+function applyDefaultOpacities(): void {
+  LAYER_CONFIGS.forEach(config => {
+    if (config.defaultOpacity !== undefined) {
+      deps.nrrdTools.value?.setLayerOpacity(config.id, config.defaultOpacity);
+    }
+  });
+}
+```
 
 ### 4.4 常量配置
 
-#### LAYER_CONFIGS — [L35-39](annotator-frontend/src/composables/left-panel/useLayerChannel.ts#L35-L39)
+#### LAYER_CONFIGS
 
 | Layer ID | 名称 | UI 颜色 | 等级禁用 | 配置扩展 |
 |----------|------|---------|----------|----------|
@@ -257,7 +289,20 @@ NrrdTools 内部 ([NrrdTools.ts:222-227](annotator-frontend/src/ts/Utils/segment
 | `layer2` | Layer 2 | `#2196F3` (Blue) | - | `disabledChannels: [2, 3, 4, 5, 6, 7, 8]` |
 | `layer3` | Layer 3 | `#FF9800` (Orange) | `disable: true` | - |
 
-在 `LayerConfig` 接口中，支持 `disable?: boolean` 直接在初始化时禁用整个图层。也支持 `disabledChannels?: number[]` 根据通道 ID 进行声明，初始化指定图层的部分子通道处于禁用状态。
+`LayerConfig` 接口支持的字段：
+- `disable?: boolean` — 初始化时禁用整个图层
+- `disabledChannels?: number[]` — 指定禁用的子通道
+- `defaultOpacity?: number` — 该 layer 的初始透明度值 (0.1–1.0，默认 1.0)
+
+**DefaultOpacity 示例：**
+
+```ts
+export const LAYER_CONFIGS: LayerConfig[] = [
+    { id: 'layer1', name: 'Layer 1' },                     // defaultOpacity = 1.0
+    { id: 'layer2', name: 'Layer 2', defaultOpacity: 0.8 }, // 初始 80% 透明度
+    { id: 'layer3', name: 'Layer 3' },                     // defaultOpacity = 1.0
+];
+```
 
 #### CHANNEL_CONFIGS（静态默认，作为 fallback）
 
@@ -331,6 +376,8 @@ useLayerChannel::setActiveLayer(layerId)                       [L102-105]
             ├─ volume.getChannelColor(activeChannel) → rgbaToHex()
             ├─ gui_states.drawing.fillColor = hex
             └─ gui_states.drawing.brushColor = hex
+        emitter.emit("LayerChannel:ActiveLayerChanged", layerId)  ← 通知 OperationCtl.vue
+            └─ 如果当前 slider radio 为 "layerAlpha" → updateSliderSettings() 刷新 slider 值
 ```
 
 ### 5.4 选择活跃 Channel

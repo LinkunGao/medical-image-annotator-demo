@@ -42,7 +42,8 @@ import NavRightPanel from "./NavRightPanel.vue";
 import SysOpts from "@/components/segmentation/SysOpts.vue";
 import SysOptsCtl from "@/components/segmentation/SysOptsCtl.vue";
 import emitter from "@/plugins/custom-emitter";
-import * as Copper from "copper3d";
+// import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 
 /** Currently open list groups (controlled by v-list v-model:opened) */
 const open = ref(["Cases"]);

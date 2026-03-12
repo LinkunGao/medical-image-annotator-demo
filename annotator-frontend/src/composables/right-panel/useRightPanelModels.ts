@@ -93,6 +93,9 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
     let registrationSlices: Copper.nrrdSliceType | undefined;
     let originSlices: Copper.nrrdSliceType | undefined;
 
+    // Cancellation token: incremented on each cleanup to invalidate stale async callbacks
+    let loadGeneration = 0;
+
     // Common geometry for spheres
     const commGeo = new THREE.SphereGeometry(3, 32, 16);
     const material = new THREE.MeshBasicMaterial({ color: "hotpink" });
@@ -157,26 +160,14 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
             segmentMask3DModel.value = undefined;
         }
 
-        // copperScene.value.loadOBJ(tomourUrl, (content) => {
-        //     allRightPanelMeshes.value.push(content);
-        //     segmentMask3DModel.value = content;
-        //     content.position.set(nrrdBias.value.x, nrrdBias.value.y, nrrdBias.value.z);
-        //     const tumourMesh = content.children[0] as THREE.Mesh;
-        //     tumourMesh.renderOrder = 3;
-
-        //     const box = new THREE.Box3().setFromObject(content);
-        //     const tumourPosition = box.getCenter(new THREE.Vector3());
-        //     onLoaded(tumourPosition);
-
-        //     const sliceIndex: ICommXYZ = {
-        //         x: loadNrrdSlices.x.RSAMaxIndex / 2 + tumourPosition.x,
-        //         y: loadNrrdSlices.y.RSAMaxIndex / 2 + tumourPosition.y,
-        //         z: loadNrrdSlices.z.RSAMaxIndex / 2 + tumourPosition.z,
-        //     };
-        //     tumourSliceIndex.value = sliceIndex;
-        //     resetSliceIndex(sliceIndex);
-        // });
+        const generation = loadGeneration;
         copperScene.value.loadPureGLB(tomourUrl, (content) => {
+            // Stale callback from a previous case — remove from scene and bail out
+            if (generation !== loadGeneration) {
+                copperScene.value?.scene.remove(content);
+                return;
+            }
+
             allRightPanelMeshes.value.push(content);
             segmentMask3DModel.value = content;
             content.position.set(nrrdBias.value.x, nrrdBias.value.y, nrrdBias.value.z);
@@ -203,7 +194,14 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
     function loadBreastModel(url: string) {
         if (!url || !copperScene.value) return;
 
+        const generation = loadGeneration;
         copperScene.value.loadOBJ(url, (content) => {
+            // Stale callback from a previous case — remove from scene and bail out
+            if (generation !== loadGeneration) {
+                copperScene.value?.scene.remove(content);
+                return;
+            }
+
             breast3DModel.value = content;
             allRightPanelMeshes.value.push(content);
             content.position.set(nrrdBias.value.x, nrrdBias.value.y, nrrdBias.value.z);
@@ -272,14 +270,19 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
     }
 
     /**
-     * Removes old meshes from scene
+     * Removes old meshes from scene and invalidates any in-flight async loads
      */
     function removeOldMeshes() {
         if (!copperScene.value) return;
+        // Increment generation so stale async callbacks (GLB/OBJ still loading) self-cancel
+        loadGeneration++;
         allRightPanelMeshes.value.forEach((mesh) => {
             copperScene.value!.scene.remove(mesh);
         });
         allRightPanelMeshes.value = [];
+        segmentMask3DModel.value = undefined;
+        breast3DModel.value = undefined;
+        preTumourSphere.value = undefined;
     }
 
     /**
