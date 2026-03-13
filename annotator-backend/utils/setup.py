@@ -5,27 +5,12 @@ import os
 import sys
 
 
-# def get_base_from_env():
-#     env_path = Path('.') / '.env'
-#     load_dotenv(dotenv_path=env_path)
-#
-#     if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-#         return os.environ["BASE"]
-#     elif sys.platform.startswith('win'):
-#         return os.environ["BASE_DUKE_locally"]
-#         # return os.environ["BASE_locally"]
-#     return os.environ["BASE"]
-
-
 def is_running_in_docker() -> bool:
     """Detect if the application is running inside a Docker container."""
-    # Check for /.dockerenv file (most reliable on Linux containers)
     if Path("/.dockerenv").exists():
         return True
-    # Check environment variable (can be set explicitly in docker-compose)
     if os.environ.get("RUNNING_IN_DOCKER", "").lower() in ("true", "1", "yes"):
         return True
-    # Check cgroup (Linux containers)
     try:
         with open("/proc/1/cgroup", "r") as f:
             return "docker" in f.read()
@@ -36,13 +21,12 @@ def is_running_in_docker() -> bool:
 
 def get_external_base_url() -> str | None:
     """
-    Build the external base URL from environment variables when in Docker.
+    Build the external base URL for MinIO when running in Docker.
 
-    Environment variables:
-      - EXTERNAL_HOST: the externally accessible host/IP (e.g. "localhost", "132.51.24.215")
-      - EXTERNAL_PORT: the externally exposed port (e.g. "8004", "8005")
-      - EXTERNAL_SCHEME: "http" or "https" (auto-detected if not set:
-                         defaults to "https" for non-localhost, "http" for localhost/127.x)
+    Environment variables (passed from main app via docker-compose):
+      - EXTERNAL_HOST: from PORTAL_BACKEND_HOST_IP (e.g. "localhost", "132.51.24.215")
+      - EXTERNAL_PORT: from MINIO_PORT (e.g. "8004")
+      - EXTERNAL_SCHEME: "http" or "https" (auto-detected if not set)
 
     Returns None if not in Docker or if EXTERNAL_HOST is not configured.
     """
