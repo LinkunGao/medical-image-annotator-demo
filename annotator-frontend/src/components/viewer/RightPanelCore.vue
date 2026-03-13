@@ -46,9 +46,9 @@ import "copper3d/dist/css/style.css";
 import { ref, onMounted } from 'vue'
 import loadingGif from "@/assets/loading.svg";
 import { PanelOperationManager, valideClock, deepClone, processPointsCloud } from "@/plugins/view-utils/utils-right";
-import nrrdViewDefault from "@/../public/nrrd_view.json";
-import nrrdViewSagittal from "@/../public/nrrd_view_sagittal.json";
-import nrrdViewCoronal from "@/../public/nrrd_view_coronal.json";
+import nrrdViewDefault from "@/assets/nrrd_view.json";
+import nrrdViewSagittal from "@/assets/nrrd_view_sagittal.json";
+import nrrdViewCoronal from "@/assets/nrrd_view_coronal.json";
 
 defineProps({
     showBottomNavBar:{
@@ -168,7 +168,6 @@ function initScene(name: string) {
     controls.rotateSpeed = 3.5;
     controls.panSpeed = 0.5;
 
-    console.log("Copper nrrdViewDefault initialized:", nrrdViewDefault);
     //update camera views
     copperScene.loadView(nrrdViewDefault);
 

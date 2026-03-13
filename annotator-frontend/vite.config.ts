@@ -86,6 +86,8 @@ export default defineConfig(({ command, mode }) => {
         BASE_URL: "/",
       },
       __IS_PLUGIN__: isPluginBuild,
+      // typedarray-pool (used by copper3d-tree) references Node's `global`
+      global: 'globalThis',
     },
     resolve: {
       alias: {

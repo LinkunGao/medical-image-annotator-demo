@@ -16,7 +16,7 @@
   },
   "system": {
     "minio": {
-      "public_path": "http://minio-1:9000/workflows/"
+      "public_path": "http://localhost:9000/workflows/"
     }
   }
 }
