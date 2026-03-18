@@ -3,8 +3,6 @@ services:
     build:
       context: .
       dockerfile: backend_compose_dockerfile
-    ports:
-      - "8002:8082"
     environment:
       - RUNNING_IN_DOCKER=true
       - EXTERNAL_HOST=${PORTAL_BACKEND_HOST_IP:-localhost}
@@ -22,7 +20,6 @@ volumes:
   digitaltwins_portal_datasets:
     external: true
   annotator_outputs:
-    name: digitaltwins_annotator_outputs
     driver: local
 networks:
   digitaltwins:
