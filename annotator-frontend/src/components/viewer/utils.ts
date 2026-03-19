@@ -8,7 +8,7 @@
  *
  * @module components/viewer/utils
  */
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 
 /** Type for tumour center position in mm */
 type TTumourCenter = { x: number; y: number; z: number };

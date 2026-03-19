@@ -71,8 +71,11 @@ import SliderControl from "@/components/navigation/SliderControl.vue";
 import ButtonsControl from "@/components/navigation/ButtonsControl.vue";
 import { ref, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
+import { useToast } from "@/composables/useToast";
 // import type { NrrdTools, ToolMode } from "@/ts/index";
 import type { NrrdTools, ToolMode } from "copper3d";
+
+const toast = useToast();
 
 const commFuncRadios = ref("pencil");
 const commFuncRadiosDisabled = ref(true);
@@ -98,6 +101,8 @@ const commFuncRadioValues = ref([
   { label: "Pencil", value: "pencil", color: "success" },
   { label: "Brush", value: "brush", color: "info" },
   { label: "Eraser", value: "eraser", color: "error" },
+  { label: "Sphere Brush", value: "sphereBrush", color: "purple" },
+  { label: "Sphere Eraser", value: "sphereEraser", color: "orange" },
 ]);
 
 const commSliderRadioValues = ref([
@@ -107,7 +112,10 @@ const commSliderRadioValues = ref([
   { label: "WindowHigh", value: "windowHigh", color: "warning" },
   { label: "WindowCenter", value: "windowLow", color: "error" },
   { label: "WindowSensitivity", value: "sensitivity", color: "pink-darken-1" },
+  { label: "Smooth Sigma", value: "smoothSigma", color: "teal" },
 ]);
+
+const smoothSigma = ref(1.0);
 
 const commFuncBtnValues = ref([
   {
@@ -133,6 +141,12 @@ const commFuncBtnValues = ref([
     value: "clearActiveLayerMask",
     disabled: btnClearAllDisabled,
     color: "nav-success",
+  },
+  {
+    label: "Smoothing: Gaussian",
+    value: "gaussianSmooth",
+    disabled: btnClearDisabled,
+    color: "nav-success-2",
   },
 ]);
 
@@ -206,6 +220,8 @@ const MODE_MAP: Record<string, ToolMode> = {
   eraser: "eraser",
   sphere: "sphere",
   calculator: "calculator",
+  sphereBrush: "sphereBrush",
+  sphereEraser: "sphereEraser",
 };
 
 function toggleFuncRadios(val: string) {
@@ -228,6 +244,11 @@ function toggleSliderRadios(_val: any) {
 function toggleSlider(val: number) {
   if (commSliderRadios.value === "sensitivity") {
     contrastDragSensitivity.value = val;
+    return;
+  }
+
+  if (commSliderRadios.value === "smoothSigma") {
+    smoothSigma.value = val;
     return;
   }
 
@@ -272,6 +293,14 @@ function updateSliderSettings() {
     return;
   }
 
+  if (commSliderRadios.value === "smoothSigma") {
+    sliderMax.value = 5.0;
+    sliderMin.value = 0.5;
+    sliderStep.value = 0.5;
+    slider.value = smoothSigma.value;
+    return;
+  }
+
   const meta = nrrdTools?.getSliderMeta(commSliderRadios.value);
   if (meta) {
     slider.value = meta.value;
@@ -282,7 +311,23 @@ function updateSliderSettings() {
 }
 
 function onBtnClick(val: string) {
-  nrrdTools.executeAction(val as any);
+  if (val === "gaussianSmooth") {
+    emitter.emit("Segmentation:SwitchAnimationStatus", { status: "flex", text: "Smoothing: Gaussian..." });
+    // Use setTimeout to let the UI update before the synchronous smoothing blocks the main thread
+    setTimeout(() => {
+      try {
+        (nrrdTools as any).executeAction(val, { sigma: smoothSigma.value });
+        toast.success("Gaussian smoothing completed");
+      } catch (e) {
+        toast.error("Gaussian smoothing failed");
+        console.error(e);
+      } finally {
+        emitter.emit("Segmentation:SwitchAnimationStatus", { status: "none" });
+      }
+    }, 50);
+  } else {
+    nrrdTools.executeAction(val as any);
+  }
 }
 
 onUnmounted(() => {

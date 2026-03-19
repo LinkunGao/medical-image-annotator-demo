@@ -8,7 +8,7 @@
  * Provides reactive state for Vue components and syncs with NrrdTools.
  */
 import { ref, computed, type Ref, type ComputedRef } from "vue";
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import emitter from "@/plugins/custom-emitter";
 
 // ===== Types =====
@@ -44,7 +44,7 @@ export interface ChannelConfig {
 // ];
 export const LAYER_CONFIGS: LayerConfig[] = [
     { id: 'layer1', name: 'Layer 1' },
-    { id: 'layer2', name: 'Layer 2' },
+    { id: 'layer2', name: 'Layer 2', defaultOpacity: 0.8 },
     { id: 'layer3', name: 'Layer 3' },
     { id: 'layer4', name: 'Layer 4' },
 ];

@@ -1,4 +1,4 @@
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import { ILoadedMeshes } from "./segmentation";
 
 export interface ILeftCoreCopperInit {

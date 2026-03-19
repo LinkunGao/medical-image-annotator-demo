@@ -38,6 +38,7 @@ const eventNames = [
     "LayerChannel:RefreshColors",
     "LayerChannel:ActiveChanged",
     "LayerChannel:ActiveLayerChanged",
+    "Segmentation:SwitchAnimationStatus",
 ];
 type EventNames = (typeof eventNames)[number];
 

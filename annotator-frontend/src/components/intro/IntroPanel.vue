@@ -17,40 +17,63 @@
       max-width="550"
       max-height="750"
     >
-      <h4 class="text-h5 font-weight-bold mb-4">How to use:</h4>
+      <h4 class="text-h5 font-weight-bold mb-4">Quick Reference</h4>
 
-      <div class="mb-8">
-        <a href="#" class="text-red-accent-2 text-decoration-none">Full panel view: </a>
-        <p class="ml-9">Mouse left double click the panel.</p>
+      <div class="mb-6">
+        <!-- Navigation -->
+        <p class="text-subtitle-2 font-weight-bold text-teal mb-1">Navigation</p>
+
+        <a href="#" class="text-red-accent-2 text-decoration-none">Full Panel View: </a>
+        <p class="ml-9 mb-1">Double-click the panel.</p>
 
         <a href="#" class="text-red-accent-2 text-decoration-none">Zoom: </a>
-        <p class="ml-9">Scroll mouse wheel.</p>
+        <p class="ml-9 mb-1">Scroll wheel (in Scroll:Zoom mode).</p>
 
         <a href="#" class="text-red-accent-2 text-decoration-none">Pan: </a>
-         <p class="ml-9">Mouse right click <a href="#" class="text-teal text-decoration-none">+</a> drag image.</p>
+        <p class="ml-9 mb-1">Right-click + drag.</p>
 
-        <a href="#" class="text-red-accent-2 text-decoration-none"
-          >Switch slice:
-        </a>
-         <p class="ml-9">Mouse left click <a href="#" class="text-teal text-decoration-none">+</a> drag image.</p>
+        <a href="#" class="text-red-accent-2 text-decoration-none">Switch Slice: </a>
+        <p class="ml-9 mb-1">Left-click + drag (in idle mode), or scroll wheel (in Scroll:Slice mode).</p>
 
-        <a href="#" class="text-red-accent-2 text-decoration-none"
-          >Painting:
-        </a>
-         <p class="ml-9">Press <a href="#" class="text-teal text-decoration-none font-weight-bold">shift</a> key on your keyboard ( <a href="#" class="text-warning text-decoration-none font-weight-bold">Don't release it</a> ), then use mouse
-        left click to paint.</p>
+        <!-- Drawing Tools -->
+        <p class="text-subtitle-2 font-weight-bold text-teal mt-4 mb-1">Drawing Tools</p>
+
+        <a href="#" class="text-red-accent-2 text-decoration-none">Pencil / Brush / Eraser: </a>
+        <p class="ml-9 mb-1">Hold <span class="text-teal font-weight-bold">Shift</span>, then left-click + drag to draw/erase.</p>
+
+        <a href="#" class="text-red-accent-2 text-decoration-none">Sphere Brush: </a>
+        <p class="ml-9 mb-1">Left-click to place center, scroll wheel to adjust radius, release to paint a 3D sphere.</p>
+
+        <a href="#" class="text-red-accent-2 text-decoration-none">Sphere Eraser: </a>
+        <p class="ml-9 mb-1">Left-click to erase a 3D sphere (or drag to erase continuously). Scroll wheel adjusts radius. Only erases the active channel.</p>
+
+        <a href="#" class="text-red-accent-2 text-decoration-none">Sphere (Marker): </a>
+        <p class="ml-9 mb-1">Left-click to place center, scroll wheel to adjust radius, release to mark. Stored in a separate overlay volume.</p>
+
+        <a href="#" class="text-red-accent-2 text-decoration-none">Smoothing: Gaussian: </a>
+        <p class="ml-9 mb-1">Click the button to smooth the active channel's mask edges. Adjust sigma via the "Smooth Sigma" slider (0.5–5.0). Fully undoable with <span class="text-teal font-weight-bold">Ctrl+Z</span>.</p>
+
+        <!-- Undo / Redo -->
+        <p class="text-subtitle-2 font-weight-bold text-teal mt-4 mb-1">Undo / Redo</p>
 
         <a href="#" class="text-red-accent-2 text-decoration-none">Undo: </a>
-         <p class="ml-9">&#9734; In GUI click undo; or </p>
-         <p class="ml-9">&#9734; On keyborad using ctrl <a href="#" class="text-teal text-decoration-none">+</a> z (Windows) /
-        command <a href="#" class="text-teal text-decoration-none">+</a> z (Mac).</p>
+        <p class="ml-9 mb-1"><span class="text-teal font-weight-bold">Ctrl+Z</span> (Windows) / <span class="text-teal font-weight-bold">Cmd+Z</span> (Mac), or click the Undo button.</p>
 
-        <a href="#" class="text-red-accent-2 text-decoration-none"
-          >Cursor Inspector:
-        </a>
-         <p class="ml-9">Press <a href="#" class="text-teal text-decoration-none font-weight-bold">s</a> key on the keyboard ( <a href="#" class="text-warning text-decoration-none font-weight-bold">Once</a> ) to enable/disable, then left click on images,
-        and use bottom tool's bar to switch the image orientation.</p>
-        </div>
+        <a href="#" class="text-red-accent-2 text-decoration-none">Redo: </a>
+        <p class="ml-9 mb-1"><span class="text-teal font-weight-bold">Ctrl+Y</span> or <span class="text-teal font-weight-bold">Ctrl+Shift+Z</span> (Windows) / <span class="text-teal font-weight-bold">Cmd+Shift+Z</span> (Mac).</p>
+
+        <!-- Keyboard Shortcuts -->
+        <p class="text-subtitle-2 font-weight-bold text-teal mt-4 mb-1">Keyboard Shortcuts</p>
+
+        <a href="#" class="text-red-accent-2 text-decoration-none">Crosshair: </a>
+        <p class="ml-9 mb-1">Press <span class="text-teal font-weight-bold">C</span> to toggle, then left-click to position.</p>
+
+        <a href="#" class="text-red-accent-2 text-decoration-none">Contrast Mode: </a>
+        <p class="ml-9 mb-1">Press <span class="text-teal font-weight-bold">Ctrl</span> to toggle, then drag horizontally (WindowHigh) / vertically (WindowCenter).</p>
+
+        <a href="#" class="text-red-accent-2 text-decoration-none">Scroll:Zoom / Scroll:Slice: </a>
+        <p class="ml-9 mb-1"><span class="text-teal font-weight-bold">Ctrl+1</span> = Scroll:Zoom, <span class="text-teal font-weight-bold">Ctrl+2</span> = Scroll:Slice.</p>
+      </div>
 
       
 

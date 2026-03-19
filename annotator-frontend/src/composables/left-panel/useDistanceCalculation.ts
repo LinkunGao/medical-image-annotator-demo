@@ -10,7 +10,7 @@
  * @module composables/left-panel/useDistanceCalculation
  */
 import { ref, type Ref } from "vue";
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import {
     ISaveSphere,
     IToolSphereData,

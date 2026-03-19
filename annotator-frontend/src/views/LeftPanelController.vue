@@ -75,7 +75,7 @@ import Upload from "@/components/common/Upload.vue";
 
 import { GUI } from "dat.gui";
 import "copper3d/dist/css/style.css";
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 
 import { onBeforeMount, onMounted, ref, onUnmounted } from "vue";
 import {
@@ -175,6 +175,11 @@ const emitterHandlers = {
     sliceNav.onContrastSelected(result.contrastState, result.order);
   },
   onRegisterImageChanged: caseManagement.onRegistedStateChanged,
+  onSwitchAnimationStatus: (payload: { status: "flex" | "none"; text?: string }) => {
+    if (loadingContainer.value && progress.value) {
+      switchAnimationStatus(loadingContainer.value, progress.value, payload.status, payload.text);
+    }
+  },
 };
 
 const { manageEmitters, cleanupEmitters } = useLeftPanelEmitters(emitterHandlers);
@@ -217,6 +222,7 @@ const onFinishedCopperInit = (copperInitData: ILeftCoreCopperInit) => {
   // nrrdTools.value.setKeyboardSettings({ mouseWheel: 'Scroll:Slice' });
   // nrrdTools.value.gui_states.sphere = true;
   // nrrdTools.value.setActiveSphereType("nipple");
+  nrrdTools.value.setOpacity(0.5);
 };
 
 const onOpenDialog = (flag: boolean) => { dialog.value = flag; };

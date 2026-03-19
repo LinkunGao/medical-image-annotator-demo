@@ -1,4 +1,4 @@
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import * as THREE from "three";
 import { getClosestNipple } from "@/plugins/view-utils/tools";
 import { IRequests, IDetails } from "@/models";

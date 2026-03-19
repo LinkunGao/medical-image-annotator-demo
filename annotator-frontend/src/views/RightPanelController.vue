@@ -7,14 +7,14 @@
     @update:reset-nrrd-image-view="handleResetNrrdImageView"
   >
     <template #tumour-distance-panel>
-      <TumourDistancePanelRight 
+      <!-- <TumourDistancePanelRight 
         :tumour-volume="distanceCalc.tumourVolume.value"
         :tumour-extent="distanceCalc.tumourExtent.value"
         :skin-dist="distanceCalc.skinDist.value"
         :rib-dist="distanceCalc.ribDist.value"
         :nipple-dist="distanceCalc.nippleDist.value"
         :nipple-clock="distanceCalc.nippleClock.value"
-      />
+      /> -->
     </template>
     <template #bottom-nav-bar>
       <NavBarRight
@@ -46,7 +46,7 @@ import TumourDistancePanelRight from "@/components/viewer/TumourDistancePanelRig
 import NavBarRight from "@/components/common/NavBarRight.vue";
 import * as THREE from "three";
 import "copper3d/dist/css/style.css";
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import { onMounted, ref, watch, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
 import { useSingleFile } from "@/plugins/api/index";

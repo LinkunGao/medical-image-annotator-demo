@@ -25,6 +25,7 @@ export interface IEmitterHandlers {
     onCaseSwitched: (casename: string) => Promise<void>;
     onContrastChanged: (result: { contrastState: boolean; order: number }) => void;
     onRegisterImageChanged: (result: boolean) => Promise<void>;
+    onSwitchAnimationStatus?: (payload: { status: "flex" | "none"; text?: string }) => void;
 }
 
 /**
@@ -42,6 +43,9 @@ export function useLeftPanelEmitters(handlers: IEmitterHandlers) {
         emitter.on("Segementation:CaseSwitched", handlers.onCaseSwitched);
         emitter.on("Segmentation:ContrastChanged", handlers.onContrastChanged);
         emitter.on("Segmentation:RegisterImageChanged", handlers.onRegisterImageChanged);
+        if (handlers.onSwitchAnimationStatus) {
+            emitter.on("Segmentation:SwitchAnimationStatus", handlers.onSwitchAnimationStatus);
+        }
     };
 
     /**
@@ -55,6 +59,9 @@ export function useLeftPanelEmitters(handlers: IEmitterHandlers) {
         emitter.off("Segementation:CaseSwitched", handlers.onCaseSwitched);
         emitter.off("Segmentation:ContrastChanged", handlers.onContrastChanged);
         emitter.off("Segmentation:RegisterImageChanged", handlers.onRegisterImageChanged);
+        if (handlers.onSwitchAnimationStatus) {
+            emitter.off("Segmentation:SwitchAnimationStatus", handlers.onSwitchAnimationStatus);
+        }
     };
 
     return {

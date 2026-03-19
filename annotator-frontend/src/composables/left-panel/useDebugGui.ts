@@ -11,7 +11,7 @@
  */
 import { ref, type Ref } from "vue";
 import { GUI, GUIController } from "dat.gui";
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import emitter from "@/plugins/custom-emitter";
 
 /**

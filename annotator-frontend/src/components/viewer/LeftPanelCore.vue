@@ -55,7 +55,7 @@
  * @emits update:setMaskData - On mask data set
  * @emits update:mouseDragContrast - On contrast adjustment via drag
  */
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import "copper3d/dist/css/style.css";
 import { GUI, GUIController } from "dat.gui";
 import { ref, onMounted, onUnmounted, onBeforeUnmount, watch, watchEffect } from "vue";

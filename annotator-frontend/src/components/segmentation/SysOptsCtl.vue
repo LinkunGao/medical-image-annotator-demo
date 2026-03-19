@@ -77,6 +77,12 @@
         ></v-select>
       </div>
     </div>
+
+    <div class="px-10 mb-4">
+      <p class="text-medium-emphasis text-body-2">
+        <strong>Shortcut:</strong> Ctrl+1 = Scroll:Zoom, Ctrl+2 = Scroll:Slice
+      </p>
+    </div>
     </Dialog>
   </div>
 </template>
@@ -101,7 +107,7 @@
  * @emits updateDebug - Emitted when debug mode is toggled
  * @emits updateSticky - Emitted when sticky mode is toggled
  */
-import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import Switcher from "@/components/common/Switcher.vue";
 import { ref, onMounted, onUnmounted, watch, computed } from "vue";
 import Dialog from "@/components/common/Dialog.vue";
