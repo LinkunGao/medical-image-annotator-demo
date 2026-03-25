@@ -760,6 +760,7 @@ async def get_file_proxy(case_id: int, file_type: str, db: Session = Depends(get
     try:
         minio_svc = MinIOService()
         bucket, object_path = minio_svc._extract_bucket_and_path(stored_url)
+        stat = minio_svc.client.stat_object(bucket, object_path)
         response = minio_svc.client.get_object(bucket, object_path)
         filename = object_path.rsplit("/", 1)[-1]
 
@@ -775,6 +776,7 @@ async def get_file_proxy(case_id: int, file_type: str, db: Session = Depends(get
             iterfile(),
             media_type="application/octet-stream",
             headers={
+                "Content-Length": str(stat.size),
                 "Content-Disposition": f"inline; filename={filename}",
                 "x-file-name": filename,
             },
