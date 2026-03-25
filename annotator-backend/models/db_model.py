@@ -27,7 +27,7 @@ class Assay(Base):
     uuid = Column(String, unique=True, index=True, nullable=False)
     user_uuid = Column(String, ForeignKey('users.uuid'), nullable=False)
     name = Column(String, nullable=False)
-    minio_public_path = Column(String, nullable=False)
+    minio_base_url = Column(String, nullable=False)
     datasets_config = Column(JSON, nullable=False)  # Stores list of dataset names
     cohorts_config = Column(JSON, nullable=False)   # Stores list of cohort/case names
     output_path = Column(String, nullable=False)

@@ -87,6 +87,15 @@ class Config:
     OUTPUTS = ["mask-meta-json", "mask-layer1-nii", "mask-layer2-nii", "mask-layer3-nii", "mask-layer4-nii", "mask-obj",
                "mask-glb"]
 
+    # MinIO SDK credentials (for private bucket access)
+    # Local dev default: minioadmin/minioadmin @ localhost:9000 (MinIO native port)
+    # Docker: injected via docker-compose environment from MINIO_SERVER_ACCESS_KEY/SECRET_KEY
+    MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
+    MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
+    MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
+    MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").lower() in ("true", "1")
+    MINIO_PRESIGNED_EXPIRES = int(os.environ.get("MINIO_PRESIGNED_EXPIRES", "3600"))
+
 
 class TumourData:
     volume: 0

@@ -2,7 +2,7 @@
   <v-app>
     <default-bar
       :title="'Medical Image Annotator'"
-      :version="'v1.0.0'"
+      :version="'v3.2.2'"
     > 
       <NavPanel />
       <template #theme>

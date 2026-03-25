@@ -14,7 +14,7 @@ class AssayInfo(BaseModel):
 
 
 class MinioSystemInfo(BaseModel):
-    public_path: str
+    base_url: str = Field(..., validation_alias=AliasChoices('base_url', 'public_path'))
 
 
 class SystemInfo(BaseModel):

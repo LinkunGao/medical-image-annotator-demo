@@ -9,6 +9,13 @@ services:
       - EXTERNAL_PORT=${MINIO_PORT:-8004}
       - EXTERNAL_SCHEME=${EXTERNAL_SCHEME:-}
       - USE_SSL=${USE_SSL:-false}
+      # MinIO SDK credentials — passed from clinical-dashboard/.env
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_SERVER_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SERVER_SECRET_KEY:-minioadmin}
+      # Nginx route prefix — used to construct externally-accessible proxy URLs
+      # Must match the location block in nginx: /plugin/<expose_name>
+      - PLUGIN_ROUTE_PREFIX=${PLUGIN_ROUTE_PREFIX:-/plugin/medical-image-annotator}
     restart: unless-stopped
     volumes:
       - digitaltwins_portal_datasets:/annotator_gui_backend/data

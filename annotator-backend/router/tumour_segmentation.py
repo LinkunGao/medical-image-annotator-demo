@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 import json
 import time
-from fastapi import Query, BackgroundTasks, WebSocket, HTTPException, Depends
+from fastapi import Query, BackgroundTasks, WebSocket, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from utils import tools
 from utils.ws_manager import manager
@@ -122,7 +122,7 @@ async def download_sds(assay_uuid: str = Query(...), db: Session = Depends(get_d
 
 
 @router.post('/api/cases')
-async def get_cases_infos(auth: UserAuth, db: Session = Depends(get_db)):
+async def get_cases_infos(auth: UserAuth, request: Request, db: Session = Depends(get_db)):
     res = {
         "names": [],
         "details": []
@@ -130,23 +130,43 @@ async def get_cases_infos(auth: UserAuth, db: Session = Depends(get_db)):
     # get cases from db
     cases = db.query(Case).filter(Case.assay_uuid == auth.assay_uuid,  # type: ignore
                                   Case.user_uuid == auth.user_uuid).all()  # type: ignore
+    # Construct base_url that works in both local dev and nginx-proxied Docker deploy.
+    # In Docker behind nginx, request.base_url is the internal container address.
+    # nginx passes X-Forwarded-Host + X-Forwarded-Proto, and PLUGIN_ROUTE_PREFIX is
+    # injected as an env var so we can reconstruct the externally-accessible URL.
+    import os
+    route_prefix = os.environ.get("PLUGIN_ROUTE_PREFIX", "")
+    forwarded_host = request.headers.get("x-forwarded-host")
+    if forwarded_host and route_prefix:
+        scheme = request.headers.get("x-forwarded-proto", "http")
+        base_url = f"{scheme}://{forwarded_host}{route_prefix}"
+    else:
+        base_url = str(request.base_url).rstrip('/')
+
     for case in cases:
         res["names"].append(case.name)
+
+        def proxy_url(file_type: str, path_val) -> str | None:
+            """Return backend proxy URL if the path exists in DB, else None."""
+            if not path_val:
+                return None
+            return f"{base_url}/api/files/{case.id}/{file_type}"
+
         res["details"].append({
             "id": case.id,
             "name": case.name,
             "assay_uuid": case.assay_uuid,
             "input": {
-                "contrast_pre": case.input.contrast_pre_path if case.input else None,
-                "contrast_1": case.input.contrast_1_path if case.input else None,
-                "contrast_2": case.input.contrast_2_path if case.input else None,
-                "contrast_3": case.input.contrast_3_path if case.input else None,
-                "contrast_4": case.input.contrast_4_path if case.input else None,
-                "registration_pre": case.input.registration_pre_path if case.input else None,
-                "registration_1": case.input.registration_1_path if case.input else None,
-                "registration_2": case.input.registration_2_path if case.input else None,
-                "registration_3": case.input.registration_3_path if case.input else None,
-                "registration_4": case.input.registration_4_path if case.input else None,
+                "contrast_pre":     proxy_url("contrast_pre",     case.input.contrast_pre_path if case.input else None),
+                "contrast_1":       proxy_url("contrast_1",       case.input.contrast_1_path if case.input else None),
+                "contrast_2":       proxy_url("contrast_2",       case.input.contrast_2_path if case.input else None),
+                "contrast_3":       proxy_url("contrast_3",       case.input.contrast_3_path if case.input else None),
+                "contrast_4":       proxy_url("contrast_4",       case.input.contrast_4_path if case.input else None),
+                "registration_pre": proxy_url("registration_pre", case.input.registration_pre_path if case.input else None),
+                "registration_1":   proxy_url("registration_1",   case.input.registration_1_path if case.input else None),
+                "registration_2":   proxy_url("registration_2",   case.input.registration_2_path if case.input else None),
+                "registration_3":   proxy_url("registration_3",   case.input.registration_3_path if case.input else None),
+                "registration_4":   proxy_url("registration_4",   case.input.registration_4_path if case.input else None),
             },
             "output": {
                 # Config.OUTPUTS[0]: mask-meta-json
@@ -700,6 +720,51 @@ async def init_mask_layers(request: model.MaskInitRequest, db: Session = Depends
         "dimensions": request.dimensions,
         "layers_initialized": ["layer1", "layer2", "layer3"]
     }
+
+
+# ---------------------------------------------------------------------------
+# File proxy: maps file_type names to CaseInput column attributes
+# ---------------------------------------------------------------------------
+_FILE_TYPE_TO_ATTR = {
+    "contrast_pre":     "contrast_pre_path",
+    "contrast_1":       "contrast_1_path",
+    "contrast_2":       "contrast_2_path",
+    "contrast_3":       "contrast_3_path",
+    "contrast_4":       "contrast_4_path",
+    "registration_pre": "registration_pre_path",
+    "registration_1":   "registration_1_path",
+    "registration_2":   "registration_2_path",
+    "registration_3":   "registration_3_path",
+    "registration_4":   "registration_4_path",
+}
+
+
+@router.get("/api/files/{case_id}/{file_type}")
+async def get_file_presigned(case_id: int, file_type: str, db: Session = Depends(get_db)):
+    """
+    Proxy endpoint for MinIO file access with presigned URLs.
+    Returns HTTP 307 redirect to a time-limited presigned URL so that the
+    browser/copper3d downloads the file directly from MinIO — no data passes
+    through the backend.
+    """
+    from fastapi.responses import RedirectResponse
+
+    if file_type not in _FILE_TYPE_TO_ATTR:
+        raise HTTPException(status_code=400, detail=f"Unknown file_type: {file_type}")
+
+    case_input = db.query(CaseInput).filter(CaseInput.case_id == case_id).first()  # type: ignore
+    if not case_input:
+        raise HTTPException(status_code=404, detail="Case input not found")
+
+    stored_url = getattr(case_input, _FILE_TYPE_TO_ATTR[file_type])
+    if not stored_url:
+        raise HTTPException(status_code=404, detail=f"No file for {file_type} in case {case_id}")
+
+    try:
+        presigned_url = MinIOService().get_presigned_url(stored_url)
+        return RedirectResponse(url=presigned_url, status_code=307)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate presigned URL: {e}")
 
 
 @router.websocket("/ws/mask/{case_id}")

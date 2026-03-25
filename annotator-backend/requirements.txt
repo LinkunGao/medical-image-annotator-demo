@@ -16,6 +16,7 @@ nninteractive==1.1.2
 huggingface_hub==0.34.3
 sqlalchemy
 msgpack
+minio>=7.2.0
 trimesh==4.5.3
 pygltflib==1.16.2
 sparc_me==3.0.2

@@ -65,6 +65,11 @@ async def root():
     return "Welcome to segmentation backend"
 
 
+@app.get('/api/health')
+async def health():
+    return {"status": "ok"}
+
+
 @app.post('/api/tool-config')
 async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_db)):
     print(f"Received tool config for user: {request.user_info.uuid}")
@@ -73,8 +78,8 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
     minio_service = MinIOService()
 
     # 1.1 Validate Minio public path
-    minio_public_path = request.system.minio.public_path
-    minio_service.validate_public_path(minio_public_path)
+    minio_base_url = request.system.minio.base_url
+    minio_service.validate_base_url(minio_base_url)
 
     datasets = request.assay_info.datasets
     cohorts = request.assay_info.cohorts
@@ -84,7 +89,7 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
     try:
         # returns { cohort_name: { input_type: full_url } }
         resolved_results = minio_service.validate_and_resolve_inputs(
-            public_path=minio_public_path,
+            public_path=minio_base_url,
             datasets=datasets,
             cohorts=cohorts,
             required_inputs=required_inputs
@@ -97,7 +102,7 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
     # Rewrite URLs for Docker environment (replace internal MinIO host with external address)
     external_base = get_external_base_url()
     if external_base:
-        print(f"Docker detected: rewriting URLs with external base: {external_base}")
+        print(f"Docker detected: rewriting MinIO URLs with external base: {external_base}")
         for cohort in resolved_results:
             for input_type in resolved_results[cohort]:
                 resolved_results[cohort][input_type] = rewrite_url_for_docker(
@@ -135,7 +140,7 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                 uuid=request.assay_info.uuid,
                 user_uuid=user.uuid,
                 name=request.assay_info.name,
-                minio_public_path=minio_public_path,
+                minio_base_url=minio_base_url,
                 datasets_config=datasets,
                 cohorts_config=cohorts,
                 output_path=str(output_dir),
