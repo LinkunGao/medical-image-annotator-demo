@@ -762,8 +762,11 @@ async def get_file_presigned(case_id: int, file_type: str, db: Session = Depends
 
     try:
         presigned_url = MinIOService().get_presigned_url(stored_url)
+        print(f"[presign] stored_url={stored_url}  →  presigned_url={presigned_url}")
         return RedirectResponse(url=presigned_url, status_code=307)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to generate presigned URL: {e}")
 
 

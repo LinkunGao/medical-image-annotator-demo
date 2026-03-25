@@ -96,29 +96,6 @@ class Config:
     MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").lower() in ("true", "1")
     MINIO_PRESIGNED_EXPIRES = int(os.environ.get("MINIO_PRESIGNED_EXPIRES", "900"))
 
-    # External MinIO endpoint for generating browser-accessible presigned URLs.
-    # In Docker, MINIO_ENDPOINT is the internal container name (e.g. minio:9000),
-    # which browsers cannot reach. This builds an external endpoint from
-    # EXTERNAL_HOST + EXTERNAL_PORT so presigned URLs work in the browser.
-    @staticmethod
-    def get_minio_external_endpoint() -> str | None:
-        """Return external MinIO endpoint (host:port) if running in Docker, else None."""
-        if not is_running_in_docker():
-            return None
-        host = os.environ.get("EXTERNAL_HOST")
-        port = os.environ.get("EXTERNAL_PORT", "")
-        if not host:
-            return None
-        return f"{host}:{port}" if port else host
-
-    @staticmethod
-    def get_minio_external_secure() -> bool:
-        """Return whether the external MinIO endpoint uses HTTPS."""
-        scheme = os.environ.get("EXTERNAL_SCHEME", "")
-        if scheme:
-            return scheme.lower() == "https"
-        return os.environ.get("USE_SSL", "false").lower() in ("true", "1", "yes")
-
 
 class TumourData:
     volume: 0

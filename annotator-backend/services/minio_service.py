@@ -1,20 +1,18 @@
 import pandas as pd
 import io
 from datetime import timedelta
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlunparse
 from typing import List, Dict
 from minio import Minio
-from utils.setup import Config
+from utils.setup import Config, get_external_base_url
 
 
 class MinIOService:
     def __init__(self):
-        self._client = None  # Lazy init — internal endpoint (for SDK data ops)
-        self._external_client = None  # Lazy init — external endpoint (for presigned URLs)
+        self._client = None  # Lazy init
 
     @property
     def client(self) -> Minio:
-        """Internal MinIO client for data operations (get_object, put_object, etc.)."""
         if self._client is None:
             self._client = Minio(
                 endpoint=Config.MINIO_ENDPOINT,
@@ -23,28 +21,6 @@ class MinIOService:
                 secure=Config.MINIO_SECURE,
             )
         return self._client
-
-    @property
-    def presign_client(self) -> Minio:
-        """
-        MinIO client for generating presigned URLs.
-        In Docker, uses the external endpoint (EXTERNAL_HOST:EXTERNAL_PORT) so that
-        the generated URLs are accessible from the browser.
-        Falls back to the internal client when not in Docker.
-        """
-        if self._external_client is None:
-            ext_endpoint = Config.get_minio_external_endpoint()
-            if ext_endpoint:
-                self._external_client = Minio(
-                    endpoint=ext_endpoint,
-                    access_key=Config.MINIO_ACCESS_KEY,
-                    secret_key=Config.MINIO_SECRET_KEY,
-                    secure=Config.get_minio_external_secure(),
-                )
-            else:
-                # Not in Docker — reuse internal client
-                self._external_client = self.client
-        return self._external_client
 
     def validate_base_url(self, base_url: str):
         if not base_url.startswith("http"):
@@ -82,15 +58,36 @@ class MinIOService:
         """
         Generate a presigned GET URL for a MinIO object.
         full_url: the stored full MinIO URL — bucket is parsed from it automatically.
-        Returns: time-limited presigned URL.
+
+        In Docker the internal client generates the presigned URL (minio:9000),
+        then the host portion is rewritten to the external address (e.g.
+        localhost:8004) so the browser can reach it.  MinIO validates presigned
+        signatures using the Host header from the incoming request, NOT the host
+        baked into the URL at signing time, so the rewrite is safe.
         """
         bucket, object_path = self._extract_bucket_and_path(full_url)
         expires = expires_seconds or Config.MINIO_PRESIGNED_EXPIRES
-        return self.presign_client.presigned_get_object(
+        presigned = self.client.presigned_get_object(
             bucket,
             object_path,
             expires=timedelta(seconds=expires),
         )
+
+        # Rewrite host for Docker: minio:9000 → localhost:8004
+        external_base = get_external_base_url()
+        if external_base:
+            parsed = urlparse(presigned)
+            ext_parsed = urlparse(external_base)
+            presigned = urlunparse((
+                ext_parsed.scheme,
+                ext_parsed.netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            ))
+
+        return presigned
 
     def validate_and_resolve_inputs(
         self,
