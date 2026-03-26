@@ -76,12 +76,12 @@ class CaseOutput(Base):
     case_id = Column(Integer, ForeignKey('cases.id'), unique=True, nullable=False)
     
     # Legacy JSON mask storage (kept for backward compatibility)
-    # Config.OUTPUTS[0]: "mask-meta-json"
+    # Config.OUTPUTS[0]: "mask_meta_json"
     mask_meta_json_path = Column(String, nullable=True)
     mask_meta_json_size = Column(Integer, nullable=True)
     
     # Layer-specific NIfTI mask storage (Phase 0 - Data Persistence Strategy)
-    # Config.OUTPUTS[1-3]: "mask-layer1-nii", "mask-layer2-nii", "mask-layer3-nii"
+    # Config.OUTPUTS[1-4]: "mask_layer1_nii", "mask_layer2_nii", "mask_layer3_nii", "mask_layer4_nii"
     mask_layer1_nii_path = Column(String, nullable=True)
     mask_layer1_nii_size = Column(Integer, nullable=True)
     mask_layer2_nii_path = Column(String, nullable=True)
@@ -92,7 +92,7 @@ class CaseOutput(Base):
     mask_layer4_nii_size = Column(Integer, nullable=True)
     
     # 3D mesh output
-    # Config.OUTPUTS[4]: "mask-obj"
+    # Config.OUTPUTS[5]: "mask_obj"
     mask_obj_path = Column(String, nullable=True)
     mask_obj_size = Column(Integer, nullable=True)
 

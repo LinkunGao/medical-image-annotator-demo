@@ -169,10 +169,10 @@ async def get_cases_infos(auth: UserAuth, request: Request, db: Session = Depend
                 "registration_4":   proxy_url("registration_4",   case.input.registration_4_path if case.input else None),
             },
             "output": {
-                # Config.OUTPUTS[0]: mask-meta-json
+                # Config.OUTPUTS[0]: mask_meta_json
                 "mask_meta_json_path": case.output.mask_meta_json_path if case.output else None,
                 "mask_meta_json_size": case.output.mask_meta_json_size if case.output else None,
-                # Config.OUTPUTS[1-3]: mask-layer*-nii
+                # Config.OUTPUTS[1-4]: mask_layer*_nii
                 "mask_layer1_nii_path": case.output.mask_layer1_nii_path if case.output else None,
                 "mask_layer1_nii_size": case.output.mask_layer1_nii_size if case.output else None,
                 "mask_layer2_nii_path": case.output.mask_layer2_nii_path if case.output else None,
@@ -181,7 +181,7 @@ async def get_cases_infos(auth: UserAuth, request: Request, db: Session = Depend
                 "mask_layer3_nii_size": case.output.mask_layer3_nii_size if case.output else None,
                 "mask_layer4_nii_path": case.output.mask_layer4_nii_path if case.output else None,
                 "mask_layer4_nii_size": case.output.mask_layer4_nii_size if case.output else None,
-                # Config.OUTPUTS[4]: mask-obj
+                # Config.OUTPUTS[5]: mask_obj
                 "mask_obj_path": case.output.mask_obj_path if case.output else None,
                 "mask_obj_size": case.output.mask_obj_size if case.output else None,
                 "mask_glb_path": case.output.mask_glb_path if case.output else None,

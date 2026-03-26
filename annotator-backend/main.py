@@ -193,16 +193,16 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
             # 4. Inputs
             # "update to case_inputs table"
             # We have resolved_results[cohort]['contrast-pre'] -> url
-            contrast_pre_url = resolved_results[cohort].get("contrast-pre")
-            contrast_1_url = resolved_results[cohort].get("contrast-1")
-            contrast_2_url = resolved_results[cohort].get("contrast-2")
-            contrast_3_url = resolved_results[cohort].get("contrast-3")
-            contrast_4_url = resolved_results[cohort].get("contrast-4")
-            registration_pre_url = resolved_results[cohort].get("registration-pre")
-            registration_1_url = resolved_results[cohort].get("registration-1")
-            registration_2_url = resolved_results[cohort].get("registration-2")
-            registration_3_url = resolved_results[cohort].get("registration-3")
-            registration_4_url = resolved_results[cohort].get("registration-4")
+            contrast_pre_url = resolved_results[cohort].get("contrast_pre")
+            contrast_1_url = resolved_results[cohort].get("contrast_1")
+            contrast_2_url = resolved_results[cohort].get("contrast_2")
+            contrast_3_url = resolved_results[cohort].get("contrast_3")
+            contrast_4_url = resolved_results[cohort].get("contrast_4")
+            registration_pre_url = resolved_results[cohort].get("registration_pre")
+            registration_1_url = resolved_results[cohort].get("registration_1")
+            registration_2_url = resolved_results[cohort].get("registration_2")
+            registration_3_url = resolved_results[cohort].get("registration_3")
+            registration_4_url = resolved_results[cohort].get("registration_4")
 
             if not case.input:
                 case_input = CaseInput(case_id=case.id,
@@ -269,24 +269,24 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                 # Update case_output with fields matching Config.OUTPUTS
                 case_output = CaseOutput(
                     case_id=case.id,
-                    # Config.OUTPUTS[0]: mask-meta-json
-                    mask_meta_json_path=file_info.get("mask-meta-json", {}).get("path"),
-                    mask_meta_json_size=file_info.get("mask-meta-json", {}).get("size"),
-                    # Config.OUTPUTS[1-3]: mask-layer1-nii, mask-layer2-nii, mask-layer3-nii
-                    mask_layer1_nii_path=file_info.get("mask-layer1-nii", {}).get("path"),
-                    mask_layer1_nii_size=file_info.get("mask-layer1-nii", {}).get("size"),
-                    mask_layer2_nii_path=file_info.get("mask-layer2-nii", {}).get("path"),
-                    mask_layer2_nii_size=file_info.get("mask-layer2-nii", {}).get("size"),
-                    mask_layer3_nii_path=file_info.get("mask-layer3-nii", {}).get("path"),
-                    mask_layer3_nii_size=file_info.get("mask-layer3-nii", {}).get("size"),
-                    mask_layer4_nii_path=file_info.get("mask-layer4-nii", {}).get("path"),
-                    mask_layer4_nii_size=file_info.get("mask-layer4-nii", {}).get("size"),
-                    # Config.OUTPUTS[4]: mask-obj
-                    mask_obj_path=file_info.get("mask-obj", {}).get("path"),
-                    mask_obj_size=file_info.get("mask-obj", {}).get("size"),
+                    # Config.OUTPUTS[0]: mask_meta_json
+                    mask_meta_json_path=file_info.get("mask_meta_json", {}).get("path"),
+                    mask_meta_json_size=file_info.get("mask_meta_json", {}).get("size"),
+                    # Config.OUTPUTS[1-4]: mask_layer1_nii, mask_layer2_nii, mask_layer3_nii, mask_layer4_nii
+                    mask_layer1_nii_path=file_info.get("mask_layer1_nii", {}).get("path"),
+                    mask_layer1_nii_size=file_info.get("mask_layer1_nii", {}).get("size"),
+                    mask_layer2_nii_path=file_info.get("mask_layer2_nii", {}).get("path"),
+                    mask_layer2_nii_size=file_info.get("mask_layer2_nii", {}).get("size"),
+                    mask_layer3_nii_path=file_info.get("mask_layer3_nii", {}).get("path"),
+                    mask_layer3_nii_size=file_info.get("mask_layer3_nii", {}).get("size"),
+                    mask_layer4_nii_path=file_info.get("mask_layer4_nii", {}).get("path"),
+                    mask_layer4_nii_size=file_info.get("mask_layer4_nii", {}).get("size"),
+                    # Config.OUTPUTS[5]: mask_obj
+                    mask_obj_path=file_info.get("mask_obj", {}).get("path"),
+                    mask_obj_size=file_info.get("mask_obj", {}).get("size"),
 
-                    mask_glb_path=file_info.get("mask-glb", {}).get("path"),
-                    mask_glb_size=file_info.get("mask-glb", {}).get("size"),
+                    mask_glb_path=file_info.get("mask_glb", {}).get("path"),
+                    mask_glb_size=file_info.get("mask_glb", {}).get("size"),
 
                     temp_dataset_name="medical-image-annotator-outputs",
                 )
