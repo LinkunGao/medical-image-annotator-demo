@@ -1,2 +1,4 @@
 .claude
 .claude/settings.local.json
+.env
+.env.producation
