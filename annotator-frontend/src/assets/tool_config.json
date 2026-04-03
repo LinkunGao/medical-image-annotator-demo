@@ -10,11 +10,10 @@
       "sub-2",
       "sub-3",
       "sub-4",
-      "sub-5",
-      "sub-6"
+      "sub-5"
     ],
     "datasets": [
-      "workdir"
+      "workdir_demo"
     ]
   },
   "system": {
