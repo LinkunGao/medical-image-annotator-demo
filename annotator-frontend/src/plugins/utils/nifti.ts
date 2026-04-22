@@ -198,6 +198,18 @@ export async function useNiftiVoxelData(niiPath: string): Promise<Uint8Array | n
     return null;
   }
 
+  // === DEBUG: Log NIfTI header info for diagnosis ===
+  const h = header as nifti.NIFTI1Header | nifti.NIFTI2Header;
+  console.log(`[NIfTI DEBUG] File: ${niiPath}`);
+  console.log(`[NIfTI DEBUG] dims: [${h.dims}]`);
+  console.log(`[NIfTI DEBUG] shape: ${h.dims[1]} x ${h.dims[2]} x ${h.dims[3]}`);
+  console.log(`[NIfTI DEBUG] total voxels: ${h.dims[1] * h.dims[2] * h.dims[3]}`);
+  console.log(`[NIfTI DEBUG] datatypeCode: ${h.datatypeCode}`);
+  console.log(`[NIfTI DEBUG] numBitsPerVoxel: ${h.numBitsPerVoxel}`);
+  console.log(`[NIfTI DEBUG] pixDims: [${h.pixDims}]`);
+  console.log(`[NIfTI DEBUG] qform_code: ${h.qform_code}, sform_code: ${h.sform_code}`);
+  // === END DEBUG ===
+
   const imageData = nifti.readImage(header, buffer);
   if (!imageData) {
     console.error(`Failed to read NIfTI image data: ${niiPath}`);
@@ -207,8 +219,16 @@ export async function useNiftiVoxelData(niiPath: string): Promise<Uint8Array | n
   // Convert to Uint8Array based on the actual NIfTI datatype.
   // Simply doing `new Uint8Array(imageData)` reinterprets raw bytes and
   // produces wrong results for multi-byte types (e.g. int16 from AI models).
-  const dtCode = (header as nifti.NIFTI1Header | nifti.NIFTI2Header).datatypeCode;
-  return niftiTypedArrayToUint8(imageData, dtCode, niiPath);
+  const dtCode = h.datatypeCode;
+
+  const result = niftiTypedArrayToUint8(imageData, dtCode, niiPath);
+  console.log(`[NIfTI DEBUG] imageData byteLength: ${imageData.byteLength}`);
+  console.log(`[NIfTI DEBUG] result Uint8Array length: ${result.length}`);
+  // Count non-zero values
+  let nonZero = 0;
+  for (let i = 0; i < result.length; i++) { if (result[i] !== 0) nonZero++; }
+  console.log(`[NIfTI DEBUG] non-zero voxels: ${nonZero}`);
+  return result;
 }
 
 /**

@@ -5,7 +5,7 @@
           v-bind="props"
           color="primary"
           prepend-icon="mdi-video-3d"
-          title="RightPanelCtl"
+          title="Right Panel Controller"
         ></v-list-item>
       </template>
   

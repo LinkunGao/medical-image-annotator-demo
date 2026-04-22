@@ -8,7 +8,6 @@ from zipfile import ZipFile
 from io import BytesIO
 from models.db_model import User, Assay, Case, CaseInput, CaseOutput
 import os
-import torch
 import numpy as np
 import nibabel as nib
 

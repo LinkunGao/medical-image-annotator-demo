@@ -6,7 +6,6 @@ __pycache__
 ./models/__pycache__
 nrrd_files.zip
 venv
-nninteractive
 
 digitaltwins
 configs.ini
