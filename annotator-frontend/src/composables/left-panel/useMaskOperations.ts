@@ -155,6 +155,15 @@ export function useMaskOperations(deps: IMaskOperationsDeps) {
                 }
 
                 if (layerBuffers.size > 0) {
+                    // === DEBUG: Log MaskVolume dimensions vs NIfTI data ===
+                    const dims = nrrdTools.value!.getCurrentImageDimension();
+                    console.log(`[MASK DEBUG] MaskVolume dimensions (from NRRD): [${dims}]`);
+                    console.log(`[MASK DEBUG] MaskVolume total (W*H*D): ${dims[0] * dims[1] * dims[2]}`);
+                    for (const [layerId, voxels] of layerBuffers) {
+                        console.log(`[MASK DEBUG] ${layerId} NIfTI voxel data length: ${voxels.length}`);
+                        console.log(`[MASK DEBUG] ${layerId} MATCH? ${voxels.length === dims[0] * dims[1] * dims[2]}`);
+                    }
+                    // === END DEBUG ===
                     nrrdTools.value!.setMasksFromNIfTI(layerBuffers, loadBarMain.value);
                 }
 

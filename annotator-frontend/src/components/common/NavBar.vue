@@ -6,6 +6,7 @@
           v-model="sliceNum"
           :max="p.max"
           :min="p.min"
+          :step="1"
           thumb-label
           density="compact"
           hide-details

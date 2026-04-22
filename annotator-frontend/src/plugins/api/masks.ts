@@ -1,4 +1,5 @@
 import http from "./client";
+import { getApiBaseUrl } from "./getBaseUrl";
 import {
     IExportMasks,
     IReplaceMask,
@@ -62,7 +63,7 @@ export async function useGetMaskRaw(
     layerId: 'layer1' | 'layer2' | 'layer3'
 ): Promise<ArrayBuffer | null> {
     try {
-        const response = await fetch(`/api/mask/raw/${caseId}/${layerId}`, {
+        const response = await fetch(`${getApiBaseUrl()}/mask/raw/${caseId}/${layerId}`, {
             method: 'GET',
             headers: {
                 'Accept': 'application/octet-stream',

@@ -1,6 +1,5 @@
 import http from "./client";
 import axios from "axios";
-import { getApiBaseUrl } from "./getBaseUrl";
 import {
     INrrdCaseNames,
     IAuth,
@@ -62,7 +61,7 @@ export async function useGenerateSDS(auth: IAuth) {
  * Returns a Blob that the caller can trigger as a file download.
  */
 export async function useDownloadSDS(assayUuid: string): Promise<Blob> {
-    const response = await axios.get(`${getApiBaseUrl()}/download_sds`, {
+    const response = await axios.get("/download_sds", {
         params: { assay_uuid: assayUuid },
         responseType: "blob",
     });

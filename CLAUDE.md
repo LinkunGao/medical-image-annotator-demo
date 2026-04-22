@@ -143,6 +143,7 @@ NRRD, NIfTI (.nii / .nii.gz), DICOM, VTK, OBJ, GLB, GLTF
 - Backend serves on **port 8082** internally, mapped to **8002** via Docker.
 - `UndoManager.pushGroup(slices)` is used for any multi-slice operation (sphere brush, gaussian smooth) to make it a single undoable action.
 - `SphereBrushTool` and `SphereTool` are distinct: `SphereBrushTool` writes to the layer's `MaskVolume` directly; `SphereTool` uses its own isolated `sphereMaskVolume` for preview.
+- **API URL convention**: `client.ts` sets `axios.defaults.baseURL = getApiBaseUrl()` (resolves to `/api` in production). All API calls via the `http` client must use relative paths **without** `/api` prefix (e.g. `/download_sds`, not `/api/download_sds`). For raw `fetch` calls, use `getApiBaseUrl()` to build the full URL. Never hardcode `/api/...` — it causes double-prefix bugs (`/api/api/...`) and breaks dev/plugin modes.
 
 ## Development Status
 
