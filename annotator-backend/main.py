@@ -17,7 +17,7 @@ from services.minio_service import MinIOValidationError
 from models.db_model import User, Assay, Case, CaseInput, CaseOutput
 from services.minio_service import MinIOService
 from database.database import get_db, init_db
-from utils.setup import Config, get_external_base_url, rewrite_url_for_docker
+from utils.setup import Config
 from contextlib import asynccontextmanager
 
 
@@ -123,15 +123,7 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
             "step": "unknown", "summary": f"Unexpected validation error: {e}", "detail": str(e)
         })
 
-    # Rewrite URLs for Docker environment (replace internal MinIO host with external address)
-    external_base = get_external_base_url()
-    if external_base:
-        print(f"Docker detected: rewriting MinIO URLs with external base: {external_base}")
-        for cohort in resolved_results:
-            for input_type in resolved_results[cohort]:
-                resolved_results[cohort][input_type] = rewrite_url_for_docker(
-                    resolved_results[cohort][input_type], external_base
-                )
+
 
     # Transactional DB updates
     try:
